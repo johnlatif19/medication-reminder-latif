@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>جدول الأدوية</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f0f2f5;
+            min-height: 100vh;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .header-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        
+        .header h1 {
+            font-size: 24px;
+        }
+        
+        .header .date {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+        
+        .login-link {
+            color: white;
+            text-decoration: none;
+            padding: 8px 20px;
+            border: 2px solid white;
+            border-radius: 8px;
+            transition: all 0.3s;
+        }
+        
+        .login-link:hover {
+            background: white;
+            color: #667eea;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 0 20px;
+        }
+        
+        .filter-section {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 30px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        
+        .filter-section input {
+            padding: 10px 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            flex: 1;
+            min-width: 150px;
+        }
+        
+        .filter-section input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .btn {
+            padding: 10px 25px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+            font-weight: 500;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+        
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+        
+        .medications-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+        }
+        
+        .medication-card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            border-right: 4px solid #667eea;
+            transition: transform 0.3s;
+        }
+        
+        .medication-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+        }
+        
+        .medication-card.taken {
+            border-right-color: #28a745;
+            opacity: 0.7;
+        }
+        
+        .medication-card .med-name {
+            font-size: 20px;
+            font-weight: bold;
+            color: #333;
+        }
+        
+        .medication-card .med-dosage {
+            color: #667eea;
+            font-size: 14px;
+            margin-top: 5px;
+        }
+        
+        .medication-card .med-time {
+            color: #666;
+            font-size: 14px;
+            margin-top: 5px;
+        }
+        
+        .medication-card .med-date {
+            color: #888;
+            font-size: 13px;
+            margin-top: 5px;
+        }
+        
+        .medication-card .med-notes {
+            color: #888;
+            font-size: 13px;
+            margin-top: 10px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 6px;
+        }
+        
+        .medication-card .status {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+            margin-top: 10px;
+        }
+        
+        .status-taken {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .status-pending {
+            background: #fff3cd;
+            color: #856404;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #666;
+            grid-column: 1 / -1;
+        }
+        
+        .empty-state .icon {
+            font-size: 64px;
+            margin-bottom: 20px;
+        }
+        
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+        
+        .stat-card {
+            background: white;
+            padding: 15px;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            text-align: center;
+        }
+        
+        .stat-card .number {
+            font-size: 28px;
+            font-weight: bold;
+            color: #667eea;
+        }
+        
+        .stat-card .label {
+            color: #666;
+            font-size: 13px;
+            margin-top: 5px;
+        }
+        
+        @media (max-width: 600px) {
+            .header-content {
+                flex-direction: column;
+                gap: 10px;
+                text-align: center;
+            }
+            
+            .filter-section {
+                flex-direction: column;
+            }
+            
+            .filter-section input {
+                width: 100%;
+            }
+            
+            .medications-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-content">
+            <div>
+                <h1>💊 جدول الأدوية</h1>
+                <div class="date" id="currentDate"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="stats">
+            <div class="stat-card">
+                <div class="number" id="totalCount">0</div>
+                <div class="label">إجمالي الأدوية</div>
+            </div>
+            <div class="stat-card">
+                <div class="number" id="takenCount">0</div>
+                <div class="label">تم تناولها</div>
+            </div>
+            <div class="stat-card">
+                <div class="number" id="pendingCount">0</div>
+                <div class="label">متبقية</div>
+            </div>
+        </div>
+
+        <div class="filter-section">
+            <input type="date" id="filterDate">
+            <button class="btn btn-primary" onclick="applyFilter()">🔍 تصفية</button>
+            <button class="btn btn-secondary" onclick="resetFilter()">🔄 عرض الكل</button>
+        </div>
+
+        <div class="medications-grid" id="medicationsGrid"></div>
+    </div>
+
+    <script>
+        let allMedications = [];
+        let currentDate = new Date().toISOString().split('T')[0];
+        
+        // Set current date
+        document.getElementById('currentDate').textContent = new Date().toLocaleDateString('ar', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            weekday: 'long'
+        });
+        
+        // Set default filter date to today
+        document.getElementById('filterDate').value = currentDate;
+        
+        // Load medications
+        async function loadMedications() {
+            try {
+                const response = await fetch('/api/medications');
+                const data = await response.json();
+                allMedications = data;
+                renderMedications(allMedications);
+                updateStats(allMedications);
+            } catch (error) {
+                console.error('Error loading medications:', error);
+                document.getElementById('medicationsGrid').innerHTML = `
+                    <div class="empty-state">
+                        <div class="icon">⚠️</div>
+                        <h3>حدث خطأ في تحميل البيانات</h3>
+                        <p>يرجى المحاولة مرة أخرى</p>
+                    </div>
+                `;
+            }
+        }
+        
+        function renderMedications(medications) {
+            const grid = document.getElementById('medicationsGrid');
+            
+            if (!medications || medications.length === 0) {
+                grid.innerHTML = `
+                    <div class="empty-state">
+                        <div class="icon">💊</div>
+                        <h3>لا توجد أدوية</h3>
+                        <p>سيتم عرض الأدوية هنا عند إضافتها</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            grid.innerHTML = medications.map(med => `
+                <div class="medication-card ${med.taken ? 'taken' : ''}">
+                    <div class="med-name">${med.name}</div>
+                    <div class="med-dosage">💉 ${med.dosage}</div>
+                    <div class="med-time">🕐 ${med.time || 'غير محدد'}</div>
+                    <div class="med-date">📅 ${med.date || 'غير محدد'}</div>
+                    ${med.notes ? `<div class="med-notes">📝 ${med.notes}</div>` : ''}
+                    <div>
+                        <span class="status ${med.taken ? 'status-taken' : 'status-pending'}">
+                            ${med.taken ? '✅ تم التناول' : '⏳ في الانتظار'}
+                        </span>
+                    </div>
+                </div>
+            `).join('');
+        }
+        
+        function updateStats(medications) {
+            const total = medications.length;
+            const taken = medications.filter(m => m.taken).length;
+            const pending = total - taken;
+            
+            document.getElementById('totalCount').textContent = total;
+            document.getElementById('takenCount').textContent = taken;
+            document.getElementById('pendingCount').textContent = pending;
+        }
+        
+        async function applyFilter() {
+            const date = document.getElementById('filterDate').value;
+            
+            if (!date) {
+                renderMedications(allMedications);
+                updateStats(allMedications);
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/medications/filter', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ date })
+                });
+                
+                const data = await response.json();
+                renderMedications(data);
+                updateStats(data);
+            } catch (error) {
+                console.error('Error filtering:', error);
+            }
+        }
+        
+        function resetFilter() {
+            document.getElementById('filterDate').value = '';
+            renderMedications(allMedications);
+            updateStats(allMedications);
+        }
+        
+        // Auto refresh every 30 seconds
+        setInterval(loadMedications, 30000);
+        
+        // Load on page load
+        loadMedications();
+    </script>
+</body>
+</html>
