@@ -1,0 +1,995 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>لوحة التحكم</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f0f2f5;
+            min-height: 100vh;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .header-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        
+        .header h1 {
+            font-size: 24px;
+        }
+        
+        .header-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+        
+        .btn-primary {
+            background: white;
+            color: #667eea;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+        
+        .btn-success:hover {
+            background: #218838;
+        }
+        
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+        
+        .btn-danger:hover {
+            background: #c82333;
+        }
+        
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+        
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+        
+        .btn-info {
+            background: #17a2b8;
+            color: white;
+        }
+        
+        .btn-info:hover {
+            background: #138496;
+        }
+        
+        .btn-logout {
+            background: rgba(255,255,255,0.2);
+            color: white;
+        }
+        
+        .btn-logout:hover {
+            background: rgba(255,255,255,0.3);
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 0 20px;
+        }
+        
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+        
+        .tab {
+            padding: 12px 25px;
+            background: white;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.3s;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }
+        
+        .tab.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .tab:hover:not(.active) {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            margin-bottom: 20px;
+        }
+        
+        .card h3 {
+            margin-bottom: 20px;
+            color: #333;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: #555;
+            font-weight: 500;
+        }
+        
+        .form-group input,
+        .form-group textarea,
+        .form-group select {
+            width: 100%;
+            padding: 10px 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            font-family: inherit;
+        }
+        
+        .form-group input:focus,
+        .form-group textarea:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .form-group textarea {
+            resize: vertical;
+            min-height: 60px;
+        }
+        
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+        
+        .medications-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+        }
+        
+        .medication-card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            border-right: 4px solid #667eea;
+            transition: transform 0.3s;
+        }
+        
+        .medication-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+        }
+        
+        .medication-card.taken {
+            border-right-color: #28a745;
+            opacity: 0.7;
+        }
+        
+        .medication-card .med-name {
+            font-size: 18px;
+            font-weight: bold;
+            color: #333;
+        }
+        
+        .medication-card .med-dosage {
+            color: #667eea;
+            font-size: 14px;
+            margin-top: 5px;
+        }
+        
+        .medication-card .med-time {
+            color: #666;
+            font-size: 14px;
+            margin-top: 5px;
+        }
+        
+        .medication-card .med-date {
+            color: #888;
+            font-size: 13px;
+            margin-top: 5px;
+        }
+        
+        .medication-card .med-notes {
+            color: #888;
+            font-size: 13px;
+            margin-top: 10px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 6px;
+        }
+        
+        .medication-card .actions {
+            margin-top: 15px;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        
+        .medication-card .status {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+            margin-top: 10px;
+        }
+        
+        .status-taken {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .status-pending {
+            background: #fff3cd;
+            color: #856404;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #666;
+        }
+        
+        .empty-state .icon {
+            font-size: 48px;
+            margin-bottom: 15px;
+        }
+        
+        .patients-list {
+            display: grid;
+            gap: 10px;
+        }
+        
+        .patient-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-right: 3px solid #667eea;
+        }
+        
+        .patient-item .info {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        
+        .patient-item .info span {
+            color: #555;
+        }
+        
+        .patient-item .info .name {
+            font-weight: bold;
+            color: #333;
+        }
+        
+        .webhook-info {
+            margin-top: 15px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+        
+        .webhook-info .status {
+            font-weight: bold;
+        }
+        
+        .webhook-info .status.connected {
+            color: #28a745;
+        }
+        
+        .webhook-info .status.disconnected {
+            color: #dc3545;
+        }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .modal.active {
+            display: flex;
+        }
+        
+        .modal-content {
+            background: white;
+            border-radius: 16px;
+            padding: 30px;
+            max-width: 500px;
+            width: 100%;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        
+        .modal-content h2 {
+            margin-bottom: 20px;
+            color: #333;
+        }
+        
+        .modal-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        
+        .modal-actions .btn {
+            flex: 1;
+        }
+        
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 15px 25px;
+            border-radius: 10px;
+            color: white;
+            font-weight: 500;
+            z-index: 2000;
+            animation: slideIn 0.3s ease;
+            max-width: 400px;
+        }
+        
+        .toast-success {
+            background: #28a745;
+        }
+        
+        .toast-error {
+            background: #dc3545;
+        }
+        
+        .toast-info {
+            background: #17a2b8;
+        }
+        
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        
+        @media (max-width: 600px) {
+            .header-content {
+                flex-direction: column;
+                text-align: center;
+            }
+            
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+            
+            .medications-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .patient-item {
+                flex-direction: column;
+                gap: 10px;
+                text-align: center;
+            }
+            
+            .patient-item .info {
+                justify-content: center;
+            }
+            
+            .modal-content {
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-content">
+            <h1>💊 لوحة التحكم</h1>
+            <div class="header-actions">
+                <button class="btn btn-primary" onclick="openAddMedication()">➕ إضافة دواء</button>
+                <button class="btn btn-primary" onclick="openAddPatient()">👤 إضافة مريض</button>
+                <button class="btn btn-logout" onclick="logout()">🚪 خروج</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="tabs">
+            <button class="tab active" onclick="switchTab('medications')">💊 الأدوية</button>
+            <button class="tab" onclick="switchTab('patients')">👤 المرضى</button>
+            <button class="tab" onclick="switchTab('settings')">⚙️ الإعدادات</button>
+        </div>
+
+        <!-- Medications Tab -->
+        <div id="tab-medications" class="tab-content active">
+            <div class="card">
+                <h3>📋 قائمة الأدوية</h3>
+                <div id="medicationsList"></div>
+            </div>
+        </div>
+
+        <!-- Patients Tab -->
+        <div id="tab-patients" class="tab-content">
+            <div class="card">
+                <h3>👤 قائمة المرضى</h3>
+                <div id="patientsList"></div>
+            </div>
+        </div>
+
+        <!-- Settings Tab -->
+        <div id="tab-settings" class="tab-content">
+            <div class="card">
+                <h3>🤖 إعدادات Telegram</h3>
+                <div class="form-group">
+                    <label>Webhook URL</label>
+                    <input type="text" id="webhookUrl" placeholder="https://your-domain.com/api/webhook/telegram">
+                    <button class="btn btn-primary" onclick="setWebhook()" style="margin-top: 10px;">
+                        🔗 تعيين Webhook
+                    </button>
+                </div>
+                <div class="webhook-info">
+                    <p>📡 حالة Webhook: <span id="webhookStatus" class="status disconnected">❌ غير متصل</span></p>
+                    <p id="webhookDetails" style="margin-top: 10px; font-size: 13px; color: #666;"></p>
+                </div>
+                <div style="margin-top: 15px;">
+                    <button class="btn btn-info" onclick="loadWebhookInfo()">🔄 تحديث الحالة</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Medication Modal -->
+    <div class="modal" id="medicationModal">
+        <div class="modal-content">
+            <h2>➕ إضافة دواء جديد</h2>
+            <form id="medicationForm">
+                <div class="form-group">
+                    <label>اسم الدواء *</label>
+                    <input type="text" id="medName" placeholder="مثال: باراسيتامول" required>
+                </div>
+                <div class="form-group">
+                    <label>الجرعة *</label>
+                    <input type="text" id="medDosage" placeholder="مثال: 500 mg" required>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>وقت التناول *</label>
+                        <input type="time" id="medTime" required>
+                    </div>
+                    <div class="form-group">
+                        <label>التاريخ *</label>
+                        <input type="date" id="medDate" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>ملاحظات</label>
+                    <textarea id="medNotes" placeholder="أي ملاحظات إضافية..."></textarea>
+                </div>
+                <div class="modal-actions">
+                    <button type="submit" class="btn btn-success">💾 حفظ</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('medicationModal')">إلغاء</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Add Patient Modal -->
+    <div class="modal" id="patientModal">
+        <div class="modal-content">
+            <h2>👤 إضافة مريض جديد</h2>
+            <form id="patientForm">
+                <div class="form-group">
+                    <label>اسم المريض *</label>
+                    <input type="text" id="patientName" placeholder="مثال: أحمد محمد" required>
+                </div>
+                <div class="form-group">
+                    <label>Chat ID *</label>
+                    <input type="text" id="patientChatId" placeholder="مثال: 123456789" required>
+                </div>
+                <div class="form-group">
+                    <label>ملاحظات</label>
+                    <textarea id="patientNotes" placeholder="أي معلومات إضافية..."></textarea>
+                </div>
+                <div class="modal-actions">
+                    <button type="submit" class="btn btn-success">💾 حفظ</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('patientModal')">إلغاء</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        let currentTab = 'medications';
+        let medications = [];
+        let patients = [];
+
+        // ============ TOAST NOTIFICATIONS ============
+        function showToast(message, type = 'success') {
+            const toast = document.createElement('div');
+            toast.className = `toast toast-${type}`;
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            setTimeout(() => {
+                toast.remove();
+            }, 3000);
+        }
+
+        // ============ TAB SWITCHING ============
+        function switchTab(tab) {
+            currentTab = tab;
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            
+            document.querySelector(`.tab[onclick="switchTab('${tab}')"]`).classList.add('active');
+            document.getElementById(`tab-${tab}`).classList.add('active');
+            
+            if (tab === 'medications') loadMedications();
+            else if (tab === 'patients') loadPatients();
+            else if (tab === 'settings') loadWebhookInfo();
+        }
+
+        // ============ MODAL FUNCTIONS ============
+        function openAddMedication() {
+            document.getElementById('medicationForm').reset();
+            document.getElementById('medDate').value = new Date().toISOString().split('T')[0];
+            document.getElementById('medicationModal').classList.add('active');
+        }
+
+        function openAddPatient() {
+            document.getElementById('patientForm').reset();
+            document.getElementById('patientModal').classList.add('active');
+        }
+
+        function closeModal(id) {
+            document.getElementById(id).classList.remove('active');
+        }
+
+        // Close modal on outside click
+        document.querySelectorAll('.modal').forEach(modal => {
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    modal.classList.remove('active');
+                }
+            });
+        });
+
+        // ============ MEDICATION CRUD ============
+        document.getElementById('medicationForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const name = document.getElementById('medName').value;
+            const dosage = document.getElementById('medDosage').value;
+            const time = document.getElementById('medTime').value;
+            const date = document.getElementById('medDate').value;
+            const notes = document.getElementById('medNotes').value;
+
+            try {
+                const response = await fetch('/api/medications', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, dosage, time, date, notes })
+                });
+
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    showToast('✅ تم إضافة الدواء بنجاح وإرسال التذكير');
+                    closeModal('medicationModal');
+                    loadMedications();
+                } else {
+                    showToast('❌ ' + (data.error || 'فشل في إضافة الدواء'), 'error');
+                }
+            } catch (error) {
+                showToast('❌ حدث خطأ في الاتصال', 'error');
+                console.error(error);
+            }
+        });
+
+        async function loadMedications() {
+            try {
+                const response = await fetch('/api/medications');
+                const data = await response.json();
+                medications = data;
+                renderMedications(data);
+            } catch (error) {
+                console.error('Error loading medications:', error);
+                document.getElementById('medicationsList').innerHTML = `
+                    <div class="empty-state">
+                        <div class="icon">⚠️</div>
+                        <p>حدث خطأ في تحميل الأدوية</p>
+                    </div>
+                `;
+            }
+        }
+
+        function renderMedications(meds) {
+            const container = document.getElementById('medicationsList');
+            
+            if (!meds || meds.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="icon">💊</div>
+                        <p>لا توجد أدوية. أضف دواء جديد!</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = `
+                <div class="medications-grid">
+                    ${meds.map(med => `
+                        <div class="medication-card ${med.taken ? 'taken' : ''}">
+                            <div class="med-name">${med.name}</div>
+                            <div class="med-dosage">💉 ${med.dosage}</div>
+                            <div class="med-time">🕐 ${med.time || 'غير محدد'}</div>
+                            <div class="med-date">📅 ${med.date || 'غير محدد'}</div>
+                            ${med.notes ? `<div class="med-notes">📝 ${med.notes}</div>` : ''}
+                            <div>
+                                <span class="status ${med.taken ? 'status-taken' : 'status-pending'}">
+                                    ${med.taken ? '✅ تم التناول' : '⏳ في الانتظار'}
+                                </span>
+                            </div>
+                            <div class="actions">
+                                ${!med.taken ? `
+                                    <button class="btn btn-success" onclick="markTaken('${med.id}')">
+                                        ✅ تم التناول
+                                    </button>
+                                ` : ''}
+                                <button class="btn btn-danger" onclick="deleteMedication('${med.id}')">
+                                    🗑️ حذف
+                                </button>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        async function markTaken(id) {
+            if (!confirm('هل أنت متأكد من تناول هذا الدواء؟')) return;
+            
+            try {
+                const response = await fetch(`/api/medications/${id}/take`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ patientName: 'المريض' })
+                });
+
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    showToast('✅ تم تسجيل تناول الدواء وإرسال الإشعار');
+                    loadMedications();
+                } else {
+                    showToast('❌ ' + (data.error || 'فشل في تسجيل التناول'), 'error');
+                }
+            } catch (error) {
+                showToast('❌ حدث خطأ في الاتصال', 'error');
+                console.error(error);
+            }
+        }
+
+        async function deleteMedication(id) {
+            if (!confirm('هل أنت متأكد من حذف هذا الدواء؟')) return;
+            
+            try {
+                const response = await fetch(`/api/medications/${id}`, {
+                    method: 'DELETE'
+                });
+
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    showToast('✅ تم حذف الدواء بنجاح');
+                    loadMedications();
+                } else {
+                    showToast('❌ ' + (data.error || 'فشل في حذف الدواء'), 'error');
+                }
+            } catch (error) {
+                showToast('❌ حدث خطأ في الاتصال', 'error');
+                console.error(error);
+            }
+        }
+
+        // ============ PATIENT CRUD ============
+        document.getElementById('patientForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const name = document.getElementById('patientName').value;
+            const chatId = document.getElementById('patientChatId').value;
+            const notes = document.getElementById('patientNotes').value;
+
+            try {
+                const response = await fetch('/api/patients', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, chatId, notes })
+                });
+
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    showToast('✅ تم إضافة المريض بنجاح');
+                    closeModal('patientModal');
+                    loadPatients();
+                } else {
+                    showToast('❌ ' + (data.error || 'فشل في إضافة المريض'), 'error');
+                }
+            } catch (error) {
+                showToast('❌ حدث خطأ في الاتصال', 'error');
+                console.error(error);
+            }
+        });
+
+        async function loadPatients() {
+            try {
+                const response = await fetch('/api/patients');
+                const data = await response.json();
+                patients = data;
+                renderPatients(data);
+            } catch (error) {
+                console.error('Error loading patients:', error);
+                document.getElementById('patientsList').innerHTML = `
+                    <div class="empty-state">
+                        <div class="icon">⚠️</div>
+                        <p>حدث خطأ في تحميل المرضى</p>
+                    </div>
+                `;
+            }
+        }
+
+        function renderPatients(patientsData) {
+            const container = document.getElementById('patientsList');
+            
+            if (!patientsData || patientsData.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="icon">👤</div>
+                        <p>لا يوجد مرضى. أضف مريض جديد!</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = `
+                <div class="patients-list">
+                    ${patientsData.map(patient => `
+                        <div class="patient-item">
+                            <div class="info">
+                                <span class="name">👤 ${patient.name}</span>
+                                <span>🆔 ${patient.chatId}</span>
+                                ${patient.notes ? `<span>📝 ${patient.notes}</span>` : ''}
+                            </div>
+                            <div>
+                                <button class="btn btn-danger" onclick="deletePatient('${patient.id}')">
+                                    🗑️ حذف
+                                </button>
+                                <button class="btn btn-primary" onclick="testTelegram('${patient.chatId}')">
+                                    📨 اختبار
+                                </button>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        async function deletePatient(id) {
+            if (!confirm('هل أنت متأكد من حذف هذا المريض؟')) return;
+            
+            try {
+                const response = await fetch(`/api/patients/${id}`, {
+                    method: 'DELETE'
+                });
+
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    showToast('✅ تم حذف المريض بنجاح');
+                    loadPatients();
+                } else {
+                    showToast('❌ ' + (data.error || 'فشل في حذف المريض'), 'error');
+                }
+            } catch (error) {
+                showToast('❌ حدث خطأ في الاتصال', 'error');
+                console.error(error);
+            }
+        }
+
+        async function testTelegram(chatId) {
+            try {
+                const response = await fetch('/api/telegram/test', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        chatId, 
+                        message: '🔔 هذه رسالة اختبارية من نظام تذكير الأدوية' 
+                    })
+                });
+
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    showToast('✅ تم إرسال رسالة الاختبار بنجاح');
+                } else {
+                    showToast('❌ ' + (data.error || 'فشل في إرسال رسالة الاختبار'), 'error');
+                }
+            } catch (error) {
+                showToast('❌ حدث خطأ في الاتصال', 'error');
+                console.error(error);
+            }
+        }
+
+        // ============ TELEGRAM WEBHOOK SETTINGS ============
+        async function setWebhook() {
+            const url = document.getElementById('webhookUrl').value;
+            
+            if (!url) {
+                showToast('❌ الرجاء إدخال URL', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/telegram/set-webhook', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    showToast('✅ تم تعيين Webhook بنجاح');
+                    loadWebhookInfo();
+                } else {
+                    showToast('❌ ' + (data.error || 'فشل في تعيين Webhook'), 'error');
+                }
+            } catch (error) {
+                showToast('❌ حدث خطأ في الاتصال', 'error');
+                console.error(error);
+            }
+        }
+
+        async function loadWebhookInfo() {
+            try {
+                const response = await fetch('/api/telegram/webhook-info');
+                const data = await response.json();
+                
+                const statusElement = document.getElementById('webhookStatus');
+                const detailsElement = document.getElementById('webhookDetails');
+                
+                if (data.ok && data.result) {
+                    if (data.result.url) {
+                        statusElement.textContent = '✅ متصل';
+                        statusElement.className = 'status connected';
+                        detailsElement.textContent = `🔗 ${data.result.url}`;
+                    } else {
+                        statusElement.textContent = '❌ غير متصل';
+                        statusElement.className = 'status disconnected';
+                        detailsElement.textContent = 'لم يتم تعيين Webhook بعد';
+                    }
+                } else {
+                    statusElement.textContent = '❌ خطأ في الاتصال';
+                    statusElement.className = 'status disconnected';
+                    detailsElement.textContent = 'فشل في جلب معلومات Webhook';
+                }
+            } catch (error) {
+                console.error('Error loading webhook info:', error);
+                document.getElementById('webhookStatus').textContent = '❌ خطأ';
+                document.getElementById('webhookStatus').className = 'status disconnected';
+                document.getElementById('webhookDetails').textContent = 'فشل في الاتصال بالخادم';
+            }
+        }
+
+        // ============ AUTH ============
+        async function logout() {
+            try {
+                await fetch('/api/logout', { method: 'POST' });
+                window.location.href = '/login';
+            } catch (error) {
+                console.error('Logout error:', error);
+            }
+        }
+
+        async function checkAuth() {
+            try {
+                const response = await fetch('/api/check-auth');
+                const data = await response.json();
+                if (!data.authenticated) {
+                    window.location.href = '/login';
+                }
+            } catch (error) {
+                console.error('Auth check error:', error);
+                window.location.href = '/login';
+            }
+        }
+
+        // ============ INIT ============
+        checkAuth();
+        loadMedications();
+        loadPatients();
+
+        // Auto refresh every 30 seconds
+        setInterval(() => {
+            if (currentTab === 'medications') loadMedications();
+            else if (currentTab === 'patients') loadPatients();
+        }, 30000);
+    </script>
+</body>
+</html>
