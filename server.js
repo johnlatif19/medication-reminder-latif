@@ -11,6 +11,13 @@ const axios = require('axios');
 
 // Initialize Firebase Admin with service account
 const firebaseConfig = JSON.parse(process.env.FIREBASE_CONFIG);
+
+// Verify Firebase config
+if (!firebaseConfig || !firebaseConfig.project_id) {
+  console.error('❌ Firebase config is invalid!');
+  process.exit(1);
+}
+
 admin.initializeApp({
   credential: admin.credential.cert(firebaseConfig),
   databaseURL: `https://${firebaseConfig.project_id}.firebaseio.com`
@@ -57,7 +64,7 @@ const authenticateToken = (req, res, next) => {
   }
 };
 
-// ============ TELEGRAM FUNCTIONS ============
+// ============ TELEGRAM FUNCTIONS (Synchronous/Immediate) ============
 async function sendTelegramMessage(chatId, text, keyboard = null) {
   try {
     const payload = {
@@ -80,7 +87,7 @@ async function sendTelegramMessage(chatId, text, keyboard = null) {
   }
 }
 
-// Send notification when medication is taken
+// Send notification when medication is taken - IMMEDIATE
 async function notifyMedicationTaken(medication, patientName = 'المريض') {
   const message = `
 ✅ <b>تم تناول الدواء</b>
@@ -94,23 +101,25 @@ async function notifyMedicationTaken(medication, patientName = 'المريض') {
 ✅ تم التأكيد: ${new Date().toLocaleString('ar')}
   `;
   
-  // Send to all patients with chat IDs
   const patientsSnapshot = await db.ref('patients').once('value');
   const patients = patientsSnapshot.val() || {};
   
+  // Send to all patients in parallel for speed
+  const promises = [];
   for (const [id, patient] of Object.entries(patients)) {
     if (patient.chatId) {
-      try {
-        await sendTelegramMessage(patient.chatId, message);
-        console.log(`✅ Notification sent to ${patient.name || 'patient'}`);
-      } catch (error) {
-        console.error(`Failed to send to ${patient.name}:`, error);
-      }
+      promises.push(
+        sendTelegramMessage(patient.chatId, message)
+          .then(() => console.log(`✅ Notification sent to ${patient.name}`))
+          .catch(err => console.error(`Failed to send to ${patient.name}:`, err))
+      );
     }
   }
+  
+  await Promise.all(promises);
 }
 
-// Send reminder notification
+// Send reminder notification - IMMEDIATE
 async function sendReminder(medication, patientName = 'المريض') {
   const message = `
 🔔 <b>تذكير بتناول الدواء</b>
@@ -127,21 +136,24 @@ async function sendReminder(medication, patientName = 'المريض') {
   const patientsSnapshot = await db.ref('patients').once('value');
   const patients = patientsSnapshot.val() || {};
   
+  // Send to all patients in parallel for speed
+  const promises = [];
   for (const [id, patient] of Object.entries(patients)) {
     if (patient.chatId) {
-      try {
-        await sendTelegramMessage(patient.chatId, message, [
+      promises.push(
+        sendTelegramMessage(patient.chatId, message, [
           [
             { text: '✅ تم التناول', callback_data: `taken_${medication.id}` },
             { text: '⏰ تذكير بعد 10 دقائق', callback_data: `remind_later_${medication.id}` }
           ]
-        ]);
-        console.log(`✅ Reminder sent to ${patient.name || 'patient'}`);
-      } catch (error) {
-        console.error(`Failed to send reminder to ${patient.name}:`, error);
-      }
+        ])
+          .then(() => console.log(`✅ Reminder sent to ${patient.name}`))
+          .catch(err => console.error(`Failed to send reminder to ${patient.name}:`, err))
+      );
     }
   }
+  
+  await Promise.all(promises);
 }
 
 // ============ ROUTES ============
@@ -256,7 +268,7 @@ app.post('/api/medications/filter', async (req, res) => {
   }
 });
 
-// Add medication (protected)
+// Add medication - IMMEDIATE with notification
 app.post('/api/medications', authenticateToken, async (req, res) => {
   const { name, dosage, time, date, notes } = req.body;
 
@@ -279,13 +291,18 @@ app.post('/api/medications', authenticateToken, async (req, res) => {
     const ref = db.ref('medications').push();
     await ref.set(newMed);
 
-    // Send reminder notification to all patients
-    await sendReminder({ id: ref.key, ...newMed });
+    const medicationWithId = { id: ref.key, ...newMed };
+
+    // Send reminder immediately (don't wait for response)
+    sendReminder(medicationWithId).catch(err => {
+      console.error('Error sending reminder:', err);
+    });
 
     res.status(201).json({
       success: true,
       id: ref.key,
-      medication: { id: ref.key, ...newMed }
+      medication: medicationWithId,
+      message: 'تم إضافة الدواء وإرسال التذكير فوراً'
     });
   } catch (error) {
     console.error('Error adding medication:', error);
@@ -293,7 +310,7 @@ app.post('/api/medications', authenticateToken, async (req, res) => {
   }
 });
 
-// Mark medication as taken (protected)
+// Mark medication as taken - IMMEDIATE with notification
 app.put('/api/medications/:id/take', authenticateToken, async (req, res) => {
   const { id } = req.params;
   const { patientName } = req.body;
@@ -312,12 +329,14 @@ app.put('/api/medications/:id/take', authenticateToken, async (req, res) => {
       takenAt: new Date().toISOString()
     });
 
-    // Send notification to all patients
-    await notifyMedicationTaken({ id, ...medication }, patientName || 'المريض');
+    // Send notification immediately (don't wait for response)
+    notifyMedicationTaken({ id, ...medication }, patientName || 'المريض').catch(err => {
+      console.error('Error sending notification:', err);
+    });
 
     res.json({
       success: true,
-      message: 'تم تسجيل تناول الدواء وإرسال الإشعار'
+      message: 'تم تسجيل تناول الدواء وإرسال الإشعار فوراً'
     });
   } catch (error) {
     console.error('Error marking medication as taken:', error);
@@ -325,7 +344,7 @@ app.put('/api/medications/:id/take', authenticateToken, async (req, res) => {
   }
 });
 
-// Delete medication (protected)
+// Delete medication
 app.delete('/api/medications/:id', authenticateToken, async (req, res) => {
   const { id } = req.params;
 
@@ -352,7 +371,7 @@ app.delete('/api/medications/:id', authenticateToken, async (req, res) => {
 
 // ============ PATIENT ROUTES ============
 
-// Get all patients (protected)
+// Get all patients
 app.get('/api/patients', authenticateToken, async (req, res) => {
   try {
     const snapshot = await db.ref('patients').once('value');
@@ -370,7 +389,7 @@ app.get('/api/patients', authenticateToken, async (req, res) => {
   }
 });
 
-// Add patient (protected)
+// Add patient - IMMEDIATE with welcome message
 app.post('/api/patients', authenticateToken, async (req, res) => {
   const { name, chatId, notes } = req.body;
 
@@ -389,17 +408,16 @@ app.post('/api/patients', authenticateToken, async (req, res) => {
     const ref = db.ref('patients').push();
     await ref.set(newPatient);
 
-    // Send welcome message
-    try {
-      await sendTelegramMessage(chatId, `👋 مرحباً ${name}!\n\nتم تسجيلك في نظام تذكير الأدوية. ستتلقى إشعارات عند مواعيد الأدوية.`);
-    } catch (error) {
-      console.error('Failed to send welcome message:', error);
-    }
+    // Send welcome message immediately (don't wait for response)
+    sendTelegramMessage(chatId, `👋 مرحباً ${name}!\n\nتم تسجيلك في نظام تذكير الأدوية. ستتلقى إشعارات عند مواعيد الأدوية.`)
+      .then(() => console.log(`✅ Welcome message sent to ${name}`))
+      .catch(err => console.error(`Failed to send welcome to ${name}:`, err));
 
     res.status(201).json({
       success: true,
       id: ref.key,
-      patient: { id: ref.key, ...newPatient }
+      patient: { id: ref.key, ...newPatient },
+      message: 'تم إضافة المريض وإرسال رسالة الترحيب فوراً'
     });
   } catch (error) {
     console.error('Error adding patient:', error);
@@ -407,7 +425,7 @@ app.post('/api/patients', authenticateToken, async (req, res) => {
   }
 });
 
-// Delete patient (protected)
+// Delete patient
 app.delete('/api/patients/:id', authenticateToken, async (req, res) => {
   const { id } = req.params;
 
@@ -420,7 +438,7 @@ app.delete('/api/patients/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// Test Telegram (protected)
+// Test Telegram
 app.post('/api/telegram/test', authenticateToken, async (req, res) => {
   const { chatId, message } = req.body;
 
@@ -479,15 +497,13 @@ app.post('/api/webhook/telegram', express.json(), async (req, res) => {
   try {
     const { callback_query, message } = req.body;
     
-    // Handle callback queries (button clicks)
     if (callback_query) {
-      const { data, from, message: callbackMessage } = callback_query;
+      const { data, from } = callback_query;
       const chatId = from.id;
       
       if (data && data.startsWith('taken_')) {
         const medicationId = data.replace('taken_', '');
         
-        // Mark medication as taken
         const medRef = db.ref(`medications/${medicationId}`);
         const snapshot = await medRef.once('value');
         const medication = snapshot.val();
@@ -499,8 +515,6 @@ app.post('/api/webhook/telegram', express.json(), async (req, res) => {
           });
           
           await sendTelegramMessage(chatId, `✅ تم تسجيل تناول ${medication.name}`);
-          
-          // Notify all patients
           await notifyMedicationTaken({ id: medicationId, ...medication });
         } else if (medication && medication.taken) {
           await sendTelegramMessage(chatId, `ℹ️ ${medication.name} تم تناوله بالفعل`);
@@ -510,7 +524,6 @@ app.post('/api/webhook/telegram', express.json(), async (req, res) => {
       } else if (data && data.startsWith('remind_later_')) {
         const medicationId = data.replace('remind_later_', '');
         
-        // Send reminder after 10 minutes
         setTimeout(async () => {
           const medRef = db.ref(`medications/${medicationId}`);
           const snapshot = await medRef.once('value');
@@ -519,12 +532,11 @@ app.post('/api/webhook/telegram', express.json(), async (req, res) => {
           if (medication && !medication.taken) {
             await sendReminder({ id: medicationId, ...medication });
           }
-        }, 10 * 60 * 1000); // 10 minutes
+        }, 10 * 60 * 1000);
         
         await sendTelegramMessage(chatId, `⏰ سيتم التذكير بعد 10 دقائق`);
       }
       
-      // Answer callback query
       await axios.post(`${TELEGRAM_API}/answerCallbackQuery`, {
         callback_query_id: callback_query.id
       });
@@ -564,4 +576,5 @@ app.listen(PORT, () => {
   console.log(`   Username: ${process.env.ADMIN_USERNAME}`);
   console.log(`   Password: ${process.env.ADMIN_PASSWORD}`);
   console.log(`🤖 Telegram Bot Token: ${TELEGRAM_BOT_TOKEN ? '✅ تم تعيينه' : '❌ غير معين'}`);
+  console.log(`📡 Webhook URL: https://your-domain.com/api/webhook/telegram`);
 });
