@@ -24,6 +24,10 @@
       "dest": "/public/dashboard.html"
     },
     {
+      "src": "/api/webhook/telegram",
+      "dest": "server.js"
+    },
+    {
       "src": "/api/(.*)",
       "dest": "server.js"
     },
