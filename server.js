@@ -569,6 +569,27 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'حدث خطأ في الخادم' });
 });
 
+// Test Firebase connection
+app.get('/api/test-firebase', async (req, res) => {
+  try {
+    const testRef = db.ref('test');
+    await testRef.set({ 
+      timestamp: new Date().toISOString(),
+      message: 'Firebase is working!'
+    });
+    const snapshot = await testRef.once('value');
+    res.json({ 
+      success: true, 
+      data: snapshot.val() 
+    });
+  } catch (error) {
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
 // Start server
 app.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
