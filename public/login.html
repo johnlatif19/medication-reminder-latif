@@ -153,7 +153,7 @@
 </head>
 <body>
     <div class="login-container">
-        <h2>🔐 تسجيل الدخول</h2>
+        <h2>تسجيل الدخول</h2>
         <p class="subtitle">لوحة التحكم - نظام تذكير الأدوية</p>
         
         <div id="errorMessage" class="error-message"></div>
@@ -214,18 +214,18 @@
                 const data = await response.json();
                 
                 if (response.ok && data.success) {
-                    successDiv.textContent = '✅ ' + data.message;
+                    successDiv.textContent = ' ' + data.message;
                     successDiv.style.display = 'block';
                     
                     setTimeout(() => {
                         window.location.href = '/dashboard';
                     }, 1000);
                 } else {
-                    errorDiv.textContent = '❌ ' + (data.error || 'فشل تسجيل الدخول');
+                    errorDiv.textContent = ' ' + (data.error || 'فشل تسجيل الدخول');
                     errorDiv.style.display = 'block';
                 }
             } catch (error) {
-                errorDiv.textContent = '❌ حدث خطأ في الاتصال بالخادم';
+                errorDiv.textContent = ' حدث خطأ في الاتصال بالخادم';
                 errorDiv.style.display = 'block';
                 console.error('Login error:', error);
             } finally {
