@@ -23,8 +23,9 @@ try {
   process.exit(1);
 }
 
-const FIREBASE_DATABASE_URL = `https://${firebaseConfig.project_id}.firebaseio.com`;
-console.log(`📁 Firebase URL: ${FIREBASE_DATABASE_URL}`);
+// Use databaseURL from config or construct it
+const FIREBASE_DATABASE_URL = firebaseConfig.databaseURL || `https://${firebaseConfig.project_id}.firebaseio.com`;
+console.log(`📁 Firebase Database URL: ${FIREBASE_DATABASE_URL}`);
 
 // ============ TELEGRAM SETUP ============
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
@@ -56,45 +57,159 @@ const authenticateToken = (req, res, next) => {
 };
 
 // ============ HELPER FUNCTIONS ============
+// Check if Firebase is accessible
+async function checkFirebaseConnection() {
+  try {
+    const response = await axios.get(`${FIREBASE_DATABASE_URL}/.json?shallow=true`);
+    return true;
+  } catch (error) {
+    console.error('Firebase connection check failed:', error.message);
+    return false;
+  }
+}
+
 async function firebaseGet(path) {
   try {
-    const response = await axios.get(`${FIREBASE_DATABASE_URL}/${path}.json`);
+    const url = `${FIREBASE_DATABASE_URL}/${path}.json`;
+    console.log(`📡 GET: ${url}`);
+    const response = await axios.get(url);
     return response.data || {};
   } catch (error) {
     console.error(`❌ Firebase GET error (${path}):`, error.message);
+    if (error.response) {
+      console.error(`   Status: ${error.response.status}`);
+      console.error(`   Data:`, error.response.data);
+    }
     throw error;
   }
 }
 
 async function firebasePost(path, data) {
   try {
-    const response = await axios.post(`${FIREBASE_DATABASE_URL}/${path}.json`, data);
+    const url = `${FIREBASE_DATABASE_URL}/${path}.json`;
+    console.log(`📡 POST: ${url}`);
+    const response = await axios.post(url, data);
     return response.data;
   } catch (error) {
     console.error(`❌ Firebase POST error (${path}):`, error.message);
+    if (error.response) {
+      console.error(`   Status: ${error.response.status}`);
+      console.error(`   Data:`, error.response.data);
+    }
     throw error;
   }
 }
 
 async function firebasePut(path, data) {
   try {
-    const response = await axios.put(`${FIREBASE_DATABASE_URL}/${path}.json`, data);
+    const url = `${FIREBASE_DATABASE_URL}/${path}.json`;
+    console.log(`📡 PUT: ${url}`);
+    const response = await axios.put(url, data);
     return response.data;
   } catch (error) {
     console.error(`❌ Firebase PUT error (${path}):`, error.message);
+    if (error.response) {
+      console.error(`   Status: ${error.response.status}`);
+      console.error(`   Data:`, error.response.data);
+    }
     throw error;
   }
 }
 
 async function firebaseDelete(path) {
   try {
-    const response = await axios.delete(`${FIREBASE_DATABASE_URL}/${path}.json`);
+    const url = `${FIREBASE_DATABASE_URL}/${path}.json`;
+    console.log(`📡 DELETE: ${url}`);
+    const response = await axios.delete(url);
     return response.data;
   } catch (error) {
     console.error(`❌ Firebase DELETE error (${path}):`, error.message);
+    if (error.response) {
+      console.error(`   Status: ${error.response.status}`);
+      console.error(`   Data:`, error.response.data);
+    }
     throw error;
   }
 }
+
+// ============ DEBUG ROUTE ============
+app.get('/api/debug', async (req, res) => {
+  const isConnected = await checkFirebaseConnection();
+  res.json({
+    firebaseURL: FIREBASE_DATABASE_URL,
+    projectId: firebaseConfig.project_id,
+    isConnected: isConnected,
+    configKeys: Object.keys(firebaseConfig)
+  });
+});
+
+// ============ TEST ROUTE ============
+app.get('/api/test-firebase', async (req, res) => {
+  console.log('🔍 Testing Firebase connection...');
+  console.log(`📡 URL: ${FIREBASE_DATABASE_URL}`);
+  
+  try {
+    // First, check if we can access the database
+    const testData = { 
+      timestamp: new Date().toISOString(), 
+      status: 'connected',
+      test: 'Hello from Vercel!'
+    };
+    
+    const result = await firebasePut('test_connection', testData);
+    const data = await firebaseGet('test_connection');
+    
+    res.json({ 
+      success: true, 
+      message: 'Firebase is connected!',
+      databaseURL: FIREBASE_DATABASE_URL,
+      data: data
+    });
+  } catch (error) {
+    console.error('❌ Firebase test failed:', error.message);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message,
+      databaseURL: FIREBASE_DATABASE_URL,
+      suggestion: 'Check if Realtime Database is enabled in Firebase Console'
+    });
+  }
+});
+
+// ============ AUTH ROUTES ============
+app.post('/api/login', async (req, res) => {
+  const { username, password } = req.body;
+  if (!username || !password) {
+    return res.status(400).json({ error: 'الرجاء إدخال اسم المستخدم وكلمة المرور' });
+  }
+
+  if (username === process.env.ADMIN_USERNAME && password === process.env.ADMIN_PASSWORD) {
+    const token = jwt.sign({ username, role: 'admin' }, process.env.JWT_SECRET, { expiresIn: '24h' });
+    res.cookie('token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: 24 * 60 * 60 * 1000
+    });
+    return res.json({ success: true, message: 'تم تسجيل الدخول بنجاح', token });
+  }
+  res.status(401).json({ error: 'اسم المستخدم أو كلمة المرور غير صحيحة' });
+});
+
+app.post('/api/logout', (req, res) => {
+  res.clearCookie('token');
+  res.json({ success: true, message: 'تم تسجيل الخروج' });
+});
+
+app.get('/api/check-auth', (req, res) => {
+  const token = req.cookies.token;
+  if (!token) return res.json({ authenticated: false });
+  try {
+    jwt.verify(token, process.env.JWT_SECRET);
+    res.json({ authenticated: true });
+  } catch (error) {
+    res.json({ authenticated: false });
+  }
+});
 
 // ============ TELEGRAM FUNCTIONS ============
 async function sendTelegramMessage(chatId, text, keyboard = null) {
@@ -173,55 +288,6 @@ async function sendReminder(medication, patientName = 'المريض') {
     console.error('Error getting patients:', error);
   }
 }
-
-// ============ TEST ROUTE ============
-app.get('/api/test-firebase', async (req, res) => {
-  console.log('🔍 Testing Firebase connection...');
-  try {
-    const testData = { timestamp: new Date().toISOString(), status: 'connected' };
-    await firebasePut('test_connection.json', testData);
-    const data = await firebaseGet('test_connection');
-    res.json({ success: true, message: 'Firebase is connected!', data });
-  } catch (error) {
-    console.error('❌ Firebase test failed:', error.message);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// ============ AUTH ROUTES ============
-app.post('/api/login', async (req, res) => {
-  const { username, password } = req.body;
-  if (!username || !password) {
-    return res.status(400).json({ error: 'الرجاء إدخال اسم المستخدم وكلمة المرور' });
-  }
-
-  if (username === process.env.ADMIN_USERNAME && password === process.env.ADMIN_PASSWORD) {
-    const token = jwt.sign({ username, role: 'admin' }, process.env.JWT_SECRET, { expiresIn: '24h' });
-    res.cookie('token', token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      maxAge: 24 * 60 * 60 * 1000
-    });
-    return res.json({ success: true, message: 'تم تسجيل الدخول بنجاح', token });
-  }
-  res.status(401).json({ error: 'اسم المستخدم أو كلمة المرور غير صحيحة' });
-});
-
-app.post('/api/logout', (req, res) => {
-  res.clearCookie('token');
-  res.json({ success: true, message: 'تم تسجيل الخروج' });
-});
-
-app.get('/api/check-auth', (req, res) => {
-  const token = req.cookies.token;
-  if (!token) return res.json({ authenticated: false });
-  try {
-    jwt.verify(token, process.env.JWT_SECRET);
-    res.json({ authenticated: true });
-  } catch (error) {
-    res.json({ authenticated: false });
-  }
-});
 
 // ============ MEDICATION ROUTES ============
 app.get('/api/medications', async (req, res) => {
@@ -485,7 +551,8 @@ app.use((err, req, res, next) => {
 app.listen(PORT, () => {
   console.log('='.repeat(50));
   console.log(`🚀 Server running on http://localhost:${PORT}`);
-  console.log(`📋 Admin login: ${process.env.ADMIN_USERNAME}`);
+  console.log(`📁 Firebase URL: ${FIREBASE_DATABASE_URL}`);
+  console.log(`📋 Admin: ${process.env.ADMIN_USERNAME}`);
   console.log(`🤖 Telegram: ${TELEGRAM_BOT_TOKEN ? '✅' : '❌'}`);
   console.log('='.repeat(50));
 });
