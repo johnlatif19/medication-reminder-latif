@@ -361,13 +361,29 @@ async function notifyMedicationTaken(medication) {
 app.get('/api/scheduler', async (req, res) => {
   try {
     console.log('📋 Running scheduler task...');
-    const cairoTime = new Date(new Date().toLocaleString('en-US', { timeZone: 'Africa/Cairo' }));
-    const currentTime = cairoTime.getHours().toString().padStart(2, '0') + ':' + 
-                        cairoTime.getMinutes().toString().padStart(2, '0');
-    const currentDate = cairoTime.toISOString().split('T')[0];
-    const now = cairoTime.getTime();
+    
+    // --- FIX: Reliable Cairo time calculation ---
+    const now = new Date();
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Africa/Cairo',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    });
+    
+    const parts = formatter.formatToParts(now);
+    const timeParts = {};
+    parts.forEach(({type, value}) => { timeParts[type] = value; });
+    
+    const currentTime = `${timeParts.hour}:${timeParts.minute}`;
+    const currentDate = `${timeParts.year}-${timeParts.month}-${timeParts.day}`;
+    const timestamp = Date.now();
     
     console.log(`🕐 Checking medications for ${currentDate} at ${currentTime}`);
+    // --- END FIX ---
 
     // Check if we have a reminder lock to prevent concurrent runs
     const lockKey = `scheduler_lock_${currentDate}_${currentTime}`;
@@ -375,7 +391,7 @@ app.get('/api/scheduler', async (req, res) => {
     
     // If lock exists and is less than 5 minutes old, skip
     if (lockData && lockData.locked) {
-      const lockAge = now - lockData.timestamp;
+      const lockAge = timestamp - lockData.timestamp;
       if (lockAge < 300000) { // 5 minutes
         console.log(`⏭️ Scheduler already ran for this time (lock age: ${Math.round(lockAge/1000)}s), skipping...`);
         return res.status(200).json({
@@ -390,7 +406,7 @@ app.get('/api/scheduler', async (req, res) => {
     // Try to acquire lock atomically
     await firebasePut(`system_locks/${lockKey}`, {
       locked: true,
-      timestamp: now,
+      timestamp: timestamp,
       startedBy: process.env.VERCEL_URL || 'unknown',
       instance: process.env.NEXT_RUNTIME || 'vercel'
     });
@@ -463,7 +479,7 @@ app.get('/api/scheduler', async (req, res) => {
     // Keep lock active for 5 minutes to prevent duplicate runs
     await firebasePut(`system_locks/${lockKey}`, {
       locked: true,
-      timestamp: now,
+      timestamp: timestamp,
       completed: true,
       completedAt: new Date().toISOString(),
       remindersSent: remindersSent,
