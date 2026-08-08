@@ -15,8 +15,7 @@
     "cors": "^2.8.5",
     "helmet": "^7.0.0",
     "express-rate-limit": "^6.10.0",
-    "cookie-parser": "^1.4.6",
-    "node-cron": "^3.0.2"
+    "cookie-parser": "^1.4.6"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"
