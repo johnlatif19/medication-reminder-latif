@@ -9,29 +9,43 @@ const path = require('path');
 const admin = require('firebase-admin');
 const axios = require('axios');
 
-// Initialize Firebase Admin with service account
-const firebaseConfig = JSON.parse(process.env.FIREBASE_CONFIG);
+// ============ FIREBASE SETUP ============
+console.log('🔧 Initializing Firebase...');
 
-// Verify Firebase config
-if (!firebaseConfig || !firebaseConfig.project_id) {
-  console.error('❌ Firebase config is invalid!');
+let firebaseConfig;
+try {
+  firebaseConfig = JSON.parse(process.env.FIREBASE_CONFIG);
+  console.log('✅ Firebase config parsed successfully');
+} catch (error) {
+  console.error('❌ Failed to parse FIREBASE_CONFIG:', error.message);
+  console.error('Please check your .env file');
   process.exit(1);
 }
 
-admin.initializeApp({
-  credential: admin.credential.cert(firebaseConfig),
-  databaseURL: `https://${firebaseConfig.project_id}.firebaseio.com`
-});
+// Initialize Firebase
+try {
+  admin.initializeApp({
+    credential: admin.credential.cert(firebaseConfig),
+    databaseURL: `https://${firebaseConfig.project_id}.firebaseio.com`
+  });
+  console.log('✅ Firebase initialized successfully');
+  console.log(`📁 Project ID: ${firebaseConfig.project_id}`);
+} catch (error) {
+  console.error('❌ Failed to initialize Firebase:', error.message);
+  process.exit(1);
+}
 
 const db = admin.database();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Telegram Bot
+// ============ TELEGRAM SETUP ============
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_API = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`;
 
-// Middleware
+console.log(`🤖 Telegram Bot: ${TELEGRAM_BOT_TOKEN ? '✅ Configured' : '❌ Missing'}`);
+
+// ============ MIDDLEWARE ============
 app.use(helmet({
   contentSecurityPolicy: false
 }));
@@ -47,7 +61,7 @@ const limiter = rateLimit({
 });
 app.use('/api/', limiter);
 
-// Authentication Middleware
+// ============ AUTH MIDDLEWARE ============
 const authenticateToken = (req, res, next) => {
   const token = req.cookies.token || req.headers.authorization?.split(' ')[1];
   
@@ -64,7 +78,7 @@ const authenticateToken = (req, res, next) => {
   }
 };
 
-// ============ TELEGRAM FUNCTIONS (Synchronous/Immediate) ============
+// ============ TELEGRAM FUNCTIONS ============
 async function sendTelegramMessage(chatId, text, keyboard = null) {
   try {
     const payload = {
@@ -87,7 +101,6 @@ async function sendTelegramMessage(chatId, text, keyboard = null) {
   }
 }
 
-// Send notification when medication is taken - IMMEDIATE
 async function notifyMedicationTaken(medication, patientName = 'المريض') {
   const message = `
 ✅ <b>تم تناول الدواء</b>
@@ -101,25 +114,24 @@ async function notifyMedicationTaken(medication, patientName = 'المريض') {
 ✅ تم التأكيد: ${new Date().toLocaleString('ar')}
   `;
   
-  const patientsSnapshot = await db.ref('patients').once('value');
-  const patients = patientsSnapshot.val() || {};
-  
-  // Send to all patients in parallel for speed
-  const promises = [];
-  for (const [id, patient] of Object.entries(patients)) {
-    if (patient.chatId) {
-      promises.push(
-        sendTelegramMessage(patient.chatId, message)
-          .then(() => console.log(`✅ Notification sent to ${patient.name}`))
-          .catch(err => console.error(`Failed to send to ${patient.name}:`, err))
-      );
+  try {
+    const snapshot = await db.ref('patients').once('value');
+    const patients = snapshot.val() || {};
+    
+    for (const [id, patient] of Object.entries(patients)) {
+      if (patient.chatId) {
+        try {
+          await sendTelegramMessage(patient.chatId, message);
+        } catch (err) {
+          console.error(`Failed to send to ${patient.name}:`, err);
+        }
+      }
     }
+  } catch (error) {
+    console.error('Error getting patients:', error);
   }
-  
-  await Promise.all(promises);
 }
 
-// Send reminder notification - IMMEDIATE
 async function sendReminder(medication, patientName = 'المريض') {
   const message = `
 🔔 <b>تذكير بتناول الدواء</b>
@@ -133,32 +145,59 @@ async function sendReminder(medication, patientName = 'المريض') {
 ⚠️ يرجى تناول الدواء في الموعد المحدد
   `;
   
-  const patientsSnapshot = await db.ref('patients').once('value');
-  const patients = patientsSnapshot.val() || {};
-  
-  // Send to all patients in parallel for speed
-  const promises = [];
-  for (const [id, patient] of Object.entries(patients)) {
-    if (patient.chatId) {
-      promises.push(
-        sendTelegramMessage(patient.chatId, message, [
-          [
-            { text: '✅ تم التناول', callback_data: `taken_${medication.id}` },
-            { text: '⏰ تذكير بعد 10 دقائق', callback_data: `remind_later_${medication.id}` }
-          ]
-        ])
-          .then(() => console.log(`✅ Reminder sent to ${patient.name}`))
-          .catch(err => console.error(`Failed to send reminder to ${patient.name}:`, err))
-      );
+  try {
+    const snapshot = await db.ref('patients').once('value');
+    const patients = snapshot.val() || {};
+    
+    for (const [id, patient] of Object.entries(patients)) {
+      if (patient.chatId) {
+        try {
+          await sendTelegramMessage(patient.chatId, message, [
+            [
+              { text: '✅ تم التناول', callback_data: `taken_${medication.id}` },
+              { text: '⏰ تذكير بعد 10 دقائق', callback_data: `remind_later_${medication.id}` }
+            ]
+          ]);
+        } catch (err) {
+          console.error(`Failed to send reminder to ${patient.name}:`, err);
+        }
+      }
     }
+  } catch (error) {
+    console.error('Error getting patients:', error);
   }
-  
-  await Promise.all(promises);
 }
 
-// ============ ROUTES ============
+// ============ TEST ROUTE ============
+// Test Firebase connection
+app.get('/api/test-firebase', async (req, res) => {
+  console.log('🔍 Testing Firebase connection...');
+  try {
+    const testRef = db.ref('test_connection');
+    await testRef.set({ 
+      timestamp: new Date().toISOString(),
+      status: 'connected'
+    });
+    
+    const snapshot = await testRef.once('value');
+    console.log('✅ Firebase test successful');
+    
+    res.json({ 
+      success: true, 
+      message: 'Firebase is connected!',
+      data: snapshot.val()
+    });
+  } catch (error) {
+    console.error('❌ Firebase test failed:', error.message);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message,
+      stack: error.stack
+    });
+  }
+});
 
-// Login
+// ============ AUTH ROUTES ============
 app.post('/api/login', async (req, res) => {
   const { username, password } = req.body;
   
@@ -191,13 +230,11 @@ app.post('/api/login', async (req, res) => {
   res.status(401).json({ error: 'اسم المستخدم أو كلمة المرور غير صحيحة' });
 });
 
-// Logout
 app.post('/api/logout', (req, res) => {
   res.clearCookie('token');
   res.json({ success: true, message: 'تم تسجيل الخروج' });
 });
 
-// Check auth
 app.get('/api/check-auth', (req, res) => {
   const token = req.cookies.token;
   if (!token) {
@@ -213,9 +250,8 @@ app.get('/api/check-auth', (req, res) => {
 });
 
 // ============ MEDICATION ROUTES ============
-
-// Get all medications (public - for index.html)
 app.get('/api/medications', async (req, res) => {
+  console.log('📊 Fetching medications...');
   try {
     const snapshot = await db.ref('medications').once('value');
     const medications = snapshot.val() || {};
@@ -231,14 +267,17 @@ app.get('/api/medications', async (req, res) => {
         return (a.time || '00:00').localeCompare(b.time || '00:00');
       });
 
+    console.log(`✅ Found ${allMeds.length} medications`);
     res.json(allMeds);
   } catch (error) {
-    console.error('Error fetching medications:', error);
-    res.status(500).json({ error: 'حدث خطأ في جلب الأدوية' });
+    console.error('❌ Error fetching medications:', error.message);
+    res.status(500).json({ 
+      error: 'حدث خطأ في جلب الأدوية',
+      details: error.message
+    });
   }
 });
 
-// Get medications by date (public)
 app.post('/api/medications/filter', async (req, res) => {
   const { date } = req.body;
   
@@ -268,7 +307,6 @@ app.post('/api/medications/filter', async (req, res) => {
   }
 });
 
-// Add medication - IMMEDIATE with notification
 app.post('/api/medications', authenticateToken, async (req, res) => {
   const { name, dosage, time, date, notes } = req.body;
 
@@ -277,6 +315,8 @@ app.post('/api/medications', authenticateToken, async (req, res) => {
   }
 
   try {
+    console.log(`➕ Adding medication: ${name}`);
+    
     const newMed = {
       name,
       dosage,
@@ -293,29 +333,34 @@ app.post('/api/medications', authenticateToken, async (req, res) => {
 
     const medicationWithId = { id: ref.key, ...newMed };
 
-    // Send reminder immediately (don't wait for response)
+    // Send reminder (don't wait for it)
     sendReminder(medicationWithId).catch(err => {
       console.error('Error sending reminder:', err);
     });
 
+    console.log(`✅ Medication added: ${ref.key}`);
     res.status(201).json({
       success: true,
       id: ref.key,
       medication: medicationWithId,
-      message: 'تم إضافة الدواء وإرسال التذكير فوراً'
+      message: 'تم إضافة الدواء وإرسال التذكير'
     });
   } catch (error) {
-    console.error('Error adding medication:', error);
-    res.status(500).json({ error: 'حدث خطأ في إضافة الدواء' });
+    console.error('❌ Error adding medication:', error.message);
+    res.status(500).json({ 
+      error: 'حدث خطأ في إضافة الدواء',
+      details: error.message
+    });
   }
 });
 
-// Mark medication as taken - IMMEDIATE with notification
 app.put('/api/medications/:id/take', authenticateToken, async (req, res) => {
   const { id } = req.params;
   const { patientName } = req.body;
 
   try {
+    console.log(`✅ Marking medication as taken: ${id}`);
+    
     const medRef = db.ref(`medications/${id}`);
     const snapshot = await medRef.once('value');
     const medication = snapshot.val();
@@ -329,26 +374,31 @@ app.put('/api/medications/:id/take', authenticateToken, async (req, res) => {
       takenAt: new Date().toISOString()
     });
 
-    // Send notification immediately (don't wait for response)
+    // Send notification (don't wait for it)
     notifyMedicationTaken({ id, ...medication }, patientName || 'المريض').catch(err => {
       console.error('Error sending notification:', err);
     });
 
+    console.log(`✅ Medication marked as taken: ${id}`);
     res.json({
       success: true,
-      message: 'تم تسجيل تناول الدواء وإرسال الإشعار فوراً'
+      message: 'تم تسجيل تناول الدواء وإرسال الإشعار'
     });
   } catch (error) {
-    console.error('Error marking medication as taken:', error);
-    res.status(500).json({ error: 'حدث خطأ في تحديث حالة الدواء' });
+    console.error('❌ Error marking medication as taken:', error.message);
+    res.status(500).json({ 
+      error: 'حدث خطأ في تحديث حالة الدواء',
+      details: error.message
+    });
   }
 });
 
-// Delete medication
 app.delete('/api/medications/:id', authenticateToken, async (req, res) => {
   const { id } = req.params;
 
   try {
+    console.log(`🗑️ Deleting medication: ${id}`);
+    
     const medRef = db.ref(`medications/${id}`);
     const snapshot = await medRef.once('value');
     const medication = snapshot.val();
@@ -359,21 +409,24 @@ app.delete('/api/medications/:id', authenticateToken, async (req, res) => {
 
     await medRef.remove();
 
+    console.log(`✅ Medication deleted: ${id}`);
     res.json({
       success: true,
       message: 'تم حذف الدواء بنجاح'
     });
   } catch (error) {
-    console.error('Error deleting medication:', error);
-    res.status(500).json({ error: 'حدث خطأ في حذف الدواء' });
+    console.error('❌ Error deleting medication:', error.message);
+    res.status(500).json({ 
+      error: 'حدث خطأ في حذف الدواء',
+      details: error.message
+    });
   }
 });
 
 // ============ PATIENT ROUTES ============
-
-// Get all patients
 app.get('/api/patients', authenticateToken, async (req, res) => {
   try {
+    console.log('👤 Fetching patients...');
     const snapshot = await db.ref('patients').once('value');
     const patients = snapshot.val() || {};
     
@@ -382,14 +435,17 @@ app.get('/api/patients', authenticateToken, async (req, res) => {
       ...patient
     }));
 
+    console.log(`✅ Found ${allPatients.length} patients`);
     res.json(allPatients);
   } catch (error) {
-    console.error('Error fetching patients:', error);
-    res.status(500).json({ error: 'حدث خطأ في جلب المرضى' });
+    console.error('❌ Error fetching patients:', error.message);
+    res.status(500).json({ 
+      error: 'حدث خطأ في جلب المرضى',
+      details: error.message
+    });
   }
 });
 
-// Add patient - IMMEDIATE with welcome message
 app.post('/api/patients', authenticateToken, async (req, res) => {
   const { name, chatId, notes } = req.body;
 
@@ -398,6 +454,8 @@ app.post('/api/patients', authenticateToken, async (req, res) => {
   }
 
   try {
+    console.log(`👤 Adding patient: ${name} (${chatId})`);
+    
     const newPatient = {
       name,
       chatId,
@@ -408,37 +466,45 @@ app.post('/api/patients', authenticateToken, async (req, res) => {
     const ref = db.ref('patients').push();
     await ref.set(newPatient);
 
-    // Send welcome message immediately (don't wait for response)
+    // Send welcome message (don't wait for it)
     sendTelegramMessage(chatId, `👋 مرحباً ${name}!\n\nتم تسجيلك في نظام تذكير الأدوية. ستتلقى إشعارات عند مواعيد الأدوية.`)
       .then(() => console.log(`✅ Welcome message sent to ${name}`))
       .catch(err => console.error(`Failed to send welcome to ${name}:`, err));
 
+    console.log(`✅ Patient added: ${ref.key}`);
     res.status(201).json({
       success: true,
       id: ref.key,
       patient: { id: ref.key, ...newPatient },
-      message: 'تم إضافة المريض وإرسال رسالة الترحيب فوراً'
+      message: 'تم إضافة المريض وإرسال رسالة الترحيب'
     });
   } catch (error) {
-    console.error('Error adding patient:', error);
-    res.status(500).json({ error: 'حدث خطأ في إضافة المريض' });
+    console.error('❌ Error adding patient:', error.message);
+    res.status(500).json({ 
+      error: 'حدث خطأ في إضافة المريض',
+      details: error.message
+    });
   }
 });
 
-// Delete patient
 app.delete('/api/patients/:id', authenticateToken, async (req, res) => {
   const { id } = req.params;
 
   try {
+    console.log(`🗑️ Deleting patient: ${id}`);
     await db.ref(`patients/${id}`).remove();
+    console.log(`✅ Patient deleted: ${id}`);
     res.json({ success: true, message: 'تم حذف المريض بنجاح' });
   } catch (error) {
-    console.error('Error deleting patient:', error);
-    res.status(500).json({ error: 'حدث خطأ في حذف المريض' });
+    console.error('❌ Error deleting patient:', error.message);
+    res.status(500).json({ 
+      error: 'حدث خطأ في حذف المريض',
+      details: error.message
+    });
   }
 });
 
-// Test Telegram
+// ============ TELEGRAM ROUTES ============
 app.post('/api/telegram/test', authenticateToken, async (req, res) => {
   const { chatId, message } = req.body;
 
@@ -447,17 +513,19 @@ app.post('/api/telegram/test', authenticateToken, async (req, res) => {
   }
 
   try {
+    console.log(`📨 Testing Telegram: ${chatId}`);
     await sendTelegramMessage(chatId, message || '🔔 رسالة اختبارية من نظام تذكير الأدوية');
+    console.log(`✅ Test message sent to ${chatId}`);
     res.json({ success: true, message: 'تم إرسال رسالة الاختبار بنجاح' });
   } catch (error) {
-    console.error('Telegram test error:', error);
-    res.status(500).json({ error: 'فشل إرسال رسالة الاختبار' });
+    console.error('❌ Telegram test error:', error.message);
+    res.status(500).json({ 
+      error: 'فشل إرسال رسالة الاختبار',
+      details: error.message
+    });
   }
 });
 
-// ============ TELEGRAM WEBHOOK ROUTES ============
-
-// Set Telegram webhook
 app.post('/api/telegram/set-webhook', authenticateToken, async (req, res) => {
   try {
     const { url } = req.body;
@@ -466,36 +534,45 @@ app.post('/api/telegram/set-webhook', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'الرجاء إدخال URL' });
     }
     
+    console.log(`🔗 Setting webhook: ${url}`);
     const response = await axios.post(`${TELEGRAM_API}/setWebhook`, {
       url: url
     });
     
+    console.log(`✅ Webhook set: ${response.data.ok}`);
     res.json({
       success: true,
       message: 'تم تعيين Webhook بنجاح',
       data: response.data
     });
   } catch (error) {
-    console.error('Set webhook error:', error);
-    res.status(500).json({ error: 'فشل في تعيين Webhook' });
+    console.error('❌ Set webhook error:', error.message);
+    res.status(500).json({ 
+      error: 'فشل في تعيين Webhook',
+      details: error.message
+    });
   }
 });
 
-// Get webhook info
 app.get('/api/telegram/webhook-info', authenticateToken, async (req, res) => {
   try {
+    console.log('📡 Getting webhook info...');
     const response = await axios.get(`${TELEGRAM_API}/getWebhookInfo`);
+    console.log(`✅ Webhook info: ${response.data.result?.url || 'Not set'}`);
     res.json(response.data);
   } catch (error) {
-    console.error('Get webhook error:', error);
-    res.status(500).json({ error: 'فشل في جلب معلومات Webhook' });
+    console.error('❌ Get webhook error:', error.message);
+    res.status(500).json({ 
+      error: 'فشل في جلب معلومات Webhook',
+      details: error.message
+    });
   }
 });
 
-// Telegram webhook endpoint (public)
+// ============ TELEGRAM WEBHOOK ============
 app.post('/api/webhook/telegram', express.json(), async (req, res) => {
   try {
-    const { callback_query, message } = req.body;
+    const { callback_query } = req.body;
     
     if (callback_query) {
       const { data, from } = callback_query;
@@ -523,6 +600,7 @@ app.post('/api/webhook/telegram', express.json(), async (req, res) => {
         }
       } else if (data && data.startsWith('remind_later_')) {
         const medicationId = data.replace('remind_later_', '');
+        await sendTelegramMessage(chatId, `⏰ سيتم التذكير بعد 10 دقائق`);
         
         setTimeout(async () => {
           const medRef = db.ref(`medications/${medicationId}`);
@@ -533,8 +611,6 @@ app.post('/api/webhook/telegram', express.json(), async (req, res) => {
             await sendReminder({ id: medicationId, ...medication });
           }
         }, 10 * 60 * 1000);
-        
-        await sendTelegramMessage(chatId, `⏰ سيتم التذكير بعد 10 دقائق`);
       }
       
       await axios.post(`${TELEGRAM_API}/answerCallbackQuery`, {
@@ -544,13 +620,12 @@ app.post('/api/webhook/telegram', express.json(), async (req, res) => {
     
     res.status(200).send('OK');
   } catch (error) {
-    console.error('Webhook error:', error);
+    console.error('❌ Webhook error:', error.message);
     res.status(500).send('Error');
   }
 });
 
 // ============ SERVE HTML ============
-
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
@@ -563,41 +638,22 @@ app.get('/dashboard', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
 });
 
-// Error handling
+// ============ ERROR HANDLING ============
 app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({ error: 'حدث خطأ في الخادم' });
+  console.error('❌ Unhandled error:', err.stack);
+  res.status(500).json({ 
+    error: 'حدث خطأ في الخادم',
+    details: err.message
+  });
 });
 
-// Test Firebase connection - NO AUTH required for testing
-app.get('/api/test-firebase', async (req, res) => {
-  try {
-    const testRef = db.ref('test');
-    await testRef.set({ 
-      timestamp: new Date().toISOString(),
-      message: 'Firebase is working!'
-    });
-    const snapshot = await testRef.once('value');
-    res.json({ 
-      success: true, 
-      data: snapshot.val() 
-    });
-  } catch (error) {
-    console.error('Firebase test error:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: error.message,
-      stack: error.stack 
-    });
-  }
-});
-
-// Start server
+// ============ START SERVER ============
 app.listen(PORT, () => {
+  console.log('='.repeat(50));
   console.log(`🚀 Server running on http://localhost:${PORT}`);
   console.log(`📋 Admin login:`);
   console.log(`   Username: ${process.env.ADMIN_USERNAME}`);
   console.log(`   Password: ${process.env.ADMIN_PASSWORD}`);
-  console.log(`🤖 Telegram Bot Token: ${TELEGRAM_BOT_TOKEN ? '✅ تم تعيينه' : '❌ غير معين'}`);
-  console.log(`📡 Webhook URL: https://your-domain.com/api/webhook/telegram`);
+  console.log(`🤖 Telegram Bot: ${TELEGRAM_BOT_TOKEN ? '✅ Configured' : '❌ Missing'}`);
+  console.log('='.repeat(50));
 });
