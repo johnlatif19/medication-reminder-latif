@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>لوحة التحكم - نظام تذكير الأدوية</title>
+    <title>لوحة التحكم</title>
     <style>
         * {
             margin: 0;
@@ -486,31 +486,31 @@
 <body>
     <div class="header">
         <div class="header-content">
-            <h1>💊 لوحة التحكم</h1>
+            <h1>لوحة التحكم</h1>
             <div class="header-actions">
-                <button class="btn btn-primary" onclick="openAddMedication()">➕ إضافة دواء</button>
-                <button class="btn btn-primary" onclick="openAddPatient()">👤 إضافة مريض</button>
-                <button class="btn btn-logout" onclick="logout()">🚪 خروج</button>
+                <button class="btn btn-primary" onclick="openAddMedication()">اضافة دواء</button>
+                <button class="btn btn-primary" onclick="openAddPatient()">اضافة مريض</button>
+                <button class="btn btn-logout" onclick="logout()">خروج</button>
             </div>
         </div>
     </div>
 
     <div class="container">
         <div class="tabs">
-            <button class="tab active" onclick="switchTab('medications')">💊 الأدوية</button>
-            <button class="tab" onclick="switchTab('patients')">👤 المرضى</button>
-            <button class="tab" onclick="switchTab('settings')">⚙️ الإعدادات</button>
+            <button class="tab active" onclick="switchTab('medications')">الادوية</button>
+            <button class="tab" onclick="switchTab('patients')">المرضى</button>
+            <button class="tab" onclick="switchTab('settings')">الاعدادات</button>
         </div>
 
         <!-- Medications Tab -->
         <div id="tab-medications" class="tab-content active">
             <div class="filter-section">
                 <input type="date" id="filterDate">
-                <button class="btn btn-primary" onclick="applyFilter()">🔍 تصفية</button>
-                <button class="btn btn-secondary" onclick="resetFilter()">🔄 إعادة تعيين</button>
+                <button class="btn btn-primary" onclick="applyFilter()">تصفية</button>
+                <button class="btn btn-secondary" onclick="resetFilter()">اعادة تعيين</button>
             </div>
             <div class="card">
-                <h3>📋 قائمة الأدوية</h3>
+                <h3>قائمة الادوية</h3>
                 <div id="medicationsList"></div>
             </div>
         </div>
@@ -518,7 +518,7 @@
         <!-- Patients Tab -->
         <div id="tab-patients" class="tab-content">
             <div class="card">
-                <h3>👤 قائمة المرضى</h3>
+                <h3>قائمة المرضى</h3>
                 <div id="patientsList"></div>
             </div>
         </div>
@@ -526,20 +526,20 @@
         <!-- Settings Tab -->
         <div id="tab-settings" class="tab-content">
             <div class="card">
-                <h3>🤖 إعدادات Telegram</h3>
+                <h3>اعدادات Telegram</h3>
                 <div class="form-group">
                     <label>Webhook URL</label>
                     <input type="text" id="webhookUrl" placeholder="https://your-domain.com/api/webhook/telegram">
                     <button class="btn btn-primary" onclick="setWebhook()" style="margin-top: 10px;">
-                        🔗 تعيين Webhook
+                        تعيين Webhook
                     </button>
                 </div>
                 <div class="webhook-info">
-                    <p>📡 حالة Webhook: <span id="webhookStatus" class="status disconnected">❌ غير متصل</span></p>
+                    <p>حالة Webhook: <span id="webhookStatus" class="status disconnected">غير متصل</span></p>
                     <p id="webhookDetails" style="margin-top: 10px; font-size: 13px; color: #666;"></p>
                 </div>
                 <div style="margin-top: 15px;">
-                    <button class="btn btn-info" onclick="loadWebhookInfo()">🔄 تحديث الحالة</button>
+                    <button class="btn btn-info" onclick="loadWebhookInfo()">تحديث الحالة</button>
                 </div>
             </div>
         </div>
@@ -548,7 +548,7 @@
     <!-- Add Medication Modal -->
     <div class="modal" id="medicationModal">
         <div class="modal-content">
-            <h2>➕ إضافة دواء جديد</h2>
+            <h2>اضافة دواء جديد</h2>
             <form id="medicationForm">
                 <div class="form-group">
                     <label>اسم الدواء *</label>
@@ -573,8 +573,8 @@
                     <textarea id="medNotes" placeholder="أي ملاحظات إضافية..."></textarea>
                 </div>
                 <div class="modal-actions">
-                    <button type="submit" class="btn btn-success">💾 حفظ</button>
-                    <button type="button" class="btn btn-secondary" onclick="closeModal('medicationModal')">إلغاء</button>
+                    <button type="submit" class="btn btn-success">حفظ</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('medicationModal')">الغاء</button>
                 </div>
             </form>
         </div>
@@ -583,7 +583,7 @@
     <!-- Add Patient Modal -->
     <div class="modal" id="patientModal">
         <div class="modal-content">
-            <h2>👤 إضافة مريض جديد</h2>
+            <h2>اضافة مريض جديد</h2>
             <form id="patientForm">
                 <div class="form-group">
                     <label>اسم المريض *</label>
@@ -598,8 +598,8 @@
                     <textarea id="patientNotes" placeholder="أي معلومات إضافية..."></textarea>
                 </div>
                 <div class="modal-actions">
-                    <button type="submit" class="btn btn-success">💾 حفظ</button>
-                    <button type="button" class="btn btn-secondary" onclick="closeModal('patientModal')">إلغاء</button>
+                    <button type="submit" class="btn btn-success">حفظ</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('patientModal')">الغاء</button>
                 </div>
             </form>
         </div>
@@ -611,7 +611,6 @@
         let patients = [];
         let filteredMedications = [];
 
-        // ============ TOAST NOTIFICATIONS ============
         function showToast(message, type = 'success') {
             const toast = document.createElement('div');
             toast.className = `toast toast-${type}`;
@@ -622,7 +621,6 @@
             }, 3000);
         }
 
-        // ============ TAB SWITCHING ============
         function switchTab(tab) {
             currentTab = tab;
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -636,7 +634,6 @@
             else if (tab === 'settings') loadWebhookInfo();
         }
 
-        // ============ MODAL FUNCTIONS ============
         function openAddMedication() {
             document.getElementById('medicationForm').reset();
             document.getElementById('medDate').value = new Date().toISOString().split('T')[0];
@@ -652,7 +649,6 @@
             document.getElementById(id).classList.remove('active');
         }
 
-        // Close modal on outside click
         document.querySelectorAll('.modal').forEach(modal => {
             modal.addEventListener('click', (e) => {
                 if (e.target === modal) {
@@ -661,7 +657,6 @@
             });
         });
 
-        // ============ MEDICATION CRUD ============
         document.getElementById('medicationForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             
@@ -681,14 +676,14 @@
                 const data = await response.json();
                 
                 if (response.ok && data.success) {
-                    showToast('✅ تم إضافة الدواء بنجاح وإرسال التذكير');
+                    showToast('تم اضافة الدواء بنجاح');
                     closeModal('medicationModal');
                     loadMedications();
                 } else {
-                    showToast('❌ ' + (data.error || 'فشل في إضافة الدواء'), 'error');
+                    showToast(data.error || 'فشل في اضافة الدواء', 'error');
                 }
             } catch (error) {
-                showToast('❌ حدث خطأ في الاتصال', 'error');
+                showToast('حدث خطأ في الاتصال', 'error');
                 console.error(error);
             }
         });
@@ -730,23 +725,23 @@
                     ${meds.map(med => `
                         <div class="medication-card ${med.taken ? 'taken' : ''}">
                             <div class="med-name">${med.name}</div>
-                            <div class="med-dosage">💉 ${med.dosage}</div>
-                            <div class="med-time">🕐 ${med.time || 'غير محدد'}</div>
-                            <div class="med-date">📅 ${med.date || 'غير محدد'}</div>
-                            ${med.notes ? `<div class="med-notes">📝 ${med.notes}</div>` : ''}
+                            <div class="med-dosage">الجرعة: ${med.dosage}</div>
+                            <div class="med-time">الوقت: ${med.time || 'غير محدد'}</div>
+                            <div class="med-date">التاريخ: ${med.date || 'غير محدد'}</div>
+                            ${med.notes ? `<div class="med-notes">ملاحظات: ${med.notes}</div>` : ''}
                             <div>
                                 <span class="status ${med.taken ? 'status-taken' : 'status-pending'}">
-                                    ${med.taken ? '✅ تم التناول' : '⏳ في الانتظار'}
+                                    ${med.taken ? 'تم التناول' : 'في الانتظار'}
                                 </span>
                             </div>
                             <div class="actions">
                                 ${!med.taken ? `
                                     <button class="btn btn-success" onclick="markTaken('${med.id}')">
-                                        ✅ تم التناول
+                                        تم التناول
                                     </button>
                                 ` : ''}
                                 <button class="btn btn-danger" onclick="deleteMedication('${med.id}')">
-                                    🗑️ حذف
+                                    حذف
                                 </button>
                             </div>
                         </div>
@@ -760,21 +755,18 @@
             const taken = meds.filter(m => m.taken).length;
             const pending = total - taken;
             
-            // Update stats in the filter section
-            const statsDiv = document.querySelector('.filter-section');
-            // Remove old stats if any
-            const oldStats = statsDiv.querySelector('.stats-inline');
+            const filterSection = document.querySelector('.filter-section');
+            const oldStats = filterSection.querySelector('.stats-inline');
             if (oldStats) oldStats.remove();
             
-            // Add new stats
             const statsHTML = `
                 <div class="stats-inline" style="display: flex; gap: 15px; margin-right: auto; font-size: 14px;">
-                    <span style="background: #e3f2fd; padding: 5px 12px; border-radius: 20px;">📊 الإجمالي: ${total}</span>
-                    <span style="background: #d4edda; padding: 5px 12px; border-radius: 20px;">✅ تم التناول: ${taken}</span>
-                    <span style="background: #fff3cd; padding: 5px 12px; border-radius: 20px;">⏳ متبقي: ${pending}</span>
+                    <span style="background: #e3f2fd; padding: 5px 12px; border-radius: 20px;">الاجمالي: ${total}</span>
+                    <span style="background: #d4edda; padding: 5px 12px; border-radius: 20px;">تم التناول: ${taken}</span>
+                    <span style="background: #fff3cd; padding: 5px 12px; border-radius: 20px;">متبقي: ${pending}</span>
                 </div>
             `;
-            statsDiv.insertAdjacentHTML('afterbegin', statsHTML);
+            filterSection.insertAdjacentHTML('afterbegin', statsHTML);
         }
 
         async function markTaken(id) {
@@ -790,13 +782,13 @@
                 const data = await response.json();
                 
                 if (response.ok && data.success) {
-                    showToast('✅ تم تسجيل تناول الدواء وإرسال الإشعار');
+                    showToast('تم تسجيل تناول الدواء وإرسال الإشعار');
                     loadMedications();
                 } else {
-                    showToast('❌ ' + (data.error || 'فشل في تسجيل التناول'), 'error');
+                    showToast(data.error || 'فشل في تسجيل التناول', 'error');
                 }
             } catch (error) {
-                showToast('❌ حدث خطأ في الاتصال', 'error');
+                showToast('حدث خطأ في الاتصال', 'error');
                 console.error(error);
             }
         }
@@ -812,23 +804,22 @@
                 const data = await response.json();
                 
                 if (response.ok && data.success) {
-                    showToast('✅ تم حذف الدواء بنجاح');
+                    showToast('تم حذف الدواء بنجاح');
                     loadMedications();
                 } else {
-                    showToast('❌ ' + (data.error || 'فشل في حذف الدواء'), 'error');
+                    showToast(data.error || 'فشل في حذف الدواء', 'error');
                 }
             } catch (error) {
-                showToast('❌ حدث خطأ في الاتصال', 'error');
+                showToast('حدث خطأ في الاتصال', 'error');
                 console.error(error);
             }
         }
 
-        // ============ FILTER FUNCTIONS ============
         async function applyFilter() {
             const date = document.getElementById('filterDate').value;
             
             if (!date) {
-                showToast('❌ الرجاء اختيار التاريخ', 'error');
+                showToast('الرجاء اختيار التاريخ', 'error');
                 return;
             }
             
@@ -846,10 +837,10 @@
                 renderMedications(data);
                 updateStats(data);
                 
-                showToast(`✅ تم تصفية الأدوية بتاريخ ${date}`, 'success');
+                showToast(`تم تصفية الأدوية بتاريخ ${date}`, 'success');
             } catch (error) {
                 console.error('Error filtering:', error);
-                showToast('❌ حدث خطأ في التصفية', 'error');
+                showToast('حدث خطأ في التصفية', 'error');
             }
         }
 
@@ -858,10 +849,9 @@
             filteredMedications = medications;
             renderMedications(medications);
             updateStats(medications);
-            showToast('🔄 تم إعادة تعيين التصفية', 'info');
+            showToast('تم اعادة تعيين التصفية', 'info');
         }
 
-        // ============ PATIENT CRUD ============
         document.getElementById('patientForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             
@@ -879,14 +869,14 @@
                 const data = await response.json();
                 
                 if (response.ok && data.success) {
-                    showToast('✅ تم إضافة المريض بنجاح وإرسال رسالة الترحيب');
+                    showToast('تم اضافة المريض بنجاح');
                     closeModal('patientModal');
                     loadPatients();
                 } else {
-                    showToast('❌ ' + (data.error || 'فشل في إضافة المريض'), 'error');
+                    showToast(data.error || 'فشل في اضافة المريض', 'error');
                 }
             } catch (error) {
-                showToast('❌ حدث خطأ في الاتصال', 'error');
+                showToast('حدث خطأ في الاتصال', 'error');
                 console.error(error);
             }
         });
@@ -926,16 +916,16 @@
                     ${patientsData.map(patient => `
                         <div class="patient-item">
                             <div class="info">
-                                <span class="name">👤 ${patient.name}</span>
-                                <span>🆔 ${patient.chatId}</span>
-                                ${patient.notes ? `<span>📝 ${patient.notes}</span>` : ''}
+                                <span class="name">${patient.name}</span>
+                                <span>Chat ID: ${patient.chatId}</span>
+                                ${patient.notes ? `<span>ملاحظات: ${patient.notes}</span>` : ''}
                             </div>
                             <div>
                                 <button class="btn btn-danger" onclick="deletePatient('${patient.id}')">
-                                    🗑️ حذف
+                                    حذف
                                 </button>
                                 <button class="btn btn-primary" onclick="testTelegram('${patient.chatId}')">
-                                    📨 اختبار
+                                    اختبار
                                 </button>
                             </div>
                         </div>
@@ -955,13 +945,13 @@
                 const data = await response.json();
                 
                 if (response.ok && data.success) {
-                    showToast('✅ تم حذف المريض بنجاح');
+                    showToast('تم حذف المريض بنجاح');
                     loadPatients();
                 } else {
-                    showToast('❌ ' + (data.error || 'فشل في حذف المريض'), 'error');
+                    showToast(data.error || 'فشل في حذف المريض', 'error');
                 }
             } catch (error) {
-                showToast('❌ حدث خطأ في الاتصال', 'error');
+                showToast('حدث خطأ في الاتصال', 'error');
                 console.error(error);
             }
         }
@@ -977,22 +967,21 @@
                 const data = await response.json();
                 
                 if (response.ok && data.success) {
-                    showToast('✅ تم إرسال رسالة الاختبار بنجاح');
+                    showToast('تم ارسال رسالة الاختبار بنجاح');
                 } else {
-                    showToast('❌ ' + (data.error || 'فشل في إرسال رسالة الاختبار'), 'error');
+                    showToast(data.error || 'فشل في ارسال رسالة الاختبار', 'error');
                 }
             } catch (error) {
-                showToast('❌ حدث خطأ في الاتصال', 'error');
+                showToast('حدث خطأ في الاتصال', 'error');
                 console.error(error);
             }
         }
 
-        // ============ TELEGRAM WEBHOOK SETTINGS ============
         async function setWebhook() {
             const url = document.getElementById('webhookUrl').value;
             
             if (!url) {
-                showToast('❌ الرجاء إدخال URL', 'error');
+                showToast('الرجاء ادخال URL', 'error');
                 return;
             }
             
@@ -1006,13 +995,13 @@
                 const data = await response.json();
                 
                 if (response.ok && data.success) {
-                    showToast('✅ تم تعيين Webhook بنجاح');
+                    showToast('تم تعيين Webhook بنجاح');
                     loadWebhookInfo();
                 } else {
-                    showToast('❌ ' + (data.error || 'فشل في تعيين Webhook'), 'error');
+                    showToast(data.error || 'فشل في تعيين Webhook', 'error');
                 }
             } catch (error) {
-                showToast('❌ حدث خطأ في الاتصال', 'error');
+                showToast('حدث خطأ في الاتصال', 'error');
                 console.error(error);
             }
         }
@@ -1027,28 +1016,27 @@
                 
                 if (data.ok && data.result) {
                     if (data.result.url) {
-                        statusElement.textContent = '✅ متصل';
+                        statusElement.textContent = 'متصل';
                         statusElement.className = 'status connected';
-                        detailsElement.textContent = `🔗 ${data.result.url}`;
+                        detailsElement.textContent = `${data.result.url}`;
                     } else {
-                        statusElement.textContent = '❌ غير متصل';
+                        statusElement.textContent = 'غير متصل';
                         statusElement.className = 'status disconnected';
                         detailsElement.textContent = 'لم يتم تعيين Webhook بعد';
                     }
                 } else {
-                    statusElement.textContent = '❌ خطأ في الاتصال';
+                    statusElement.textContent = 'خطأ في الاتصال';
                     statusElement.className = 'status disconnected';
                     detailsElement.textContent = 'فشل في جلب معلومات Webhook';
                 }
             } catch (error) {
                 console.error('Error loading webhook info:', error);
-                document.getElementById('webhookStatus').textContent = '❌ خطأ';
+                document.getElementById('webhookStatus').textContent = 'خطأ';
                 document.getElementById('webhookStatus').className = 'status disconnected';
                 document.getElementById('webhookDetails').textContent = 'فشل في الاتصال بالخادم';
             }
         }
 
-        // ============ AUTH ============
         async function logout() {
             try {
                 await fetch('/api/logout', { method: 'POST' });
@@ -1071,15 +1059,12 @@
             }
         }
 
-        // ============ INIT ============
         checkAuth();
         loadMedications();
         loadPatients();
 
-        // Set default filter date to today
         document.getElementById('filterDate').value = new Date().toISOString().split('T')[0];
 
-        // Auto refresh every 30 seconds
         setInterval(() => {
             if (currentTab === 'medications') loadMedications();
             else if (currentTab === 'patients') loadPatients();
