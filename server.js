@@ -203,21 +203,45 @@ ${patientName}
   }
 }
 
+// ============ TIME CHECK ROUTE ============
+app.get('/api/time', async (req, res) => {
+  const now = new Date();
+  const cairoTime = new Date(now.toLocaleString('en-US', { timeZone: 'Africa/Cairo' }));
+  
+  res.json({
+    utc: now.toISOString(),
+    cairo: cairoTime.toISOString(),
+    cairoTime: cairoTime.getHours().toString().padStart(2, '0') + ':' + 
+               cairoTime.getMinutes().toString().padStart(2, '0'),
+    cairoDate: cairoTime.toISOString().split('T')[0],
+    timezone: 'Africa/Cairo'
+  });
+});
+
 // ============ SCHEDULER ROUTE FOR VERCEL CRON ============
 app.get('/api/scheduler', async (req, res) => {
   try {
     console.log('Running scheduled task...');
-    const now = new Date();
-    const currentTime = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
-    const currentDate = now.toISOString().split('T')[0];
     
-    console.log(`Checking medications for ${currentDate} at ${currentTime}`);
+    // Use Cairo timezone (Africa/Cairo)
+    const now = new Date();
+    const cairoTime = new Date(now.toLocaleString('en-US', { timeZone: 'Africa/Cairo' }));
+    
+    const currentTime = cairoTime.getHours().toString().padStart(2, '0') + ':' + 
+                        cairoTime.getMinutes().toString().padStart(2, '0');
+    const currentDate = cairoTime.toISOString().split('T')[0];
+    
+    console.log(`Checking medications for ${currentDate} at ${currentTime} (Cairo time)`);
+    console.log(`UTC time: ${now.toISOString()}`);
     
     const medications = await firebaseGet('medications');
     let remindersSent = 0;
+    let matchedMeds = [];
     
     for (const [id, med] of Object.entries(medications)) {
       if (med.active && !med.taken && med.time === currentTime && med.date === currentDate) {
+        matchedMeds.push({ id, ...med });
+        
         const reminderKey = `reminder_${id}_${currentDate}`;
         const reminderSent = await firebaseGet(`reminders/${reminderKey}`);
         
@@ -233,13 +257,18 @@ app.get('/api/scheduler', async (req, res) => {
       }
     }
     
+    console.log(`Matched medications: ${matchedMeds.length}`);
     console.log(`Sent ${remindersSent} reminders`);
+    
     res.status(200).json({ 
       success: true, 
       message: 'Scheduler executed',
       remindersSent: remindersSent,
       time: currentTime,
-      date: currentDate
+      date: currentDate,
+      cairoTime: cairoTime.toISOString(),
+      matchedMedications: matchedMeds.map(m => m.name),
+      totalMedications: Object.keys(medications).length
     });
   } catch (error) {
     console.error('Scheduler error:', error.message);
