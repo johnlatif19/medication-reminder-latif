@@ -569,7 +569,7 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'حدث خطأ في الخادم' });
 });
 
-// Test Firebase connection
+// Test Firebase connection - NO AUTH required for testing
 app.get('/api/test-firebase', async (req, res) => {
   try {
     const testRef = db.ref('test');
@@ -583,9 +583,11 @@ app.get('/api/test-firebase', async (req, res) => {
       data: snapshot.val() 
     });
   } catch (error) {
+    console.error('Firebase test error:', error);
     res.status(500).json({ 
       success: false, 
-      error: error.message 
+      error: error.message,
+      stack: error.stack 
     });
   }
 });
