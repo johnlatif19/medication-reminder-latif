@@ -387,11 +387,20 @@ app.get('/api/scheduler', async (req, res) => {
 
     // Check if we have a reminder lock to prevent concurrent runs
     const lockKey = `scheduler_lock_${currentDate}_${currentTime}`;
-    const lockData = await firebaseGet(`system_locks/${lockKey}`);
+    
+    // Try to get the lock
+    let lockData;
+    try {
+      lockData = await firebaseGet(`system_locks/${lockKey}`);
+    } catch (error) {
+      // If we can't read the lock, assume it doesn't exist
+      console.log('⚠️ Could not read lock, assuming no lock exists');
+      lockData = null;
+    }
     
     // If lock exists and is less than 5 minutes old, skip
     if (lockData && lockData.locked) {
-      const lockAge = timestamp - lockData.timestamp;
+      const lockAge = timestamp - (lockData.timestamp || 0);
       if (lockAge < 300000) { // 5 minutes
         console.log(`⏭️ Scheduler already ran for this time (lock age: ${Math.round(lockAge/1000)}s), skipping...`);
         return res.status(200).json({
@@ -400,16 +409,51 @@ app.get('/api/scheduler', async (req, res) => {
           skipped: true,
           lockAge: Math.round(lockAge/1000)
         });
+      } else {
+        // Lock is expired, we can overwrite it
+        console.log('🔓 Lock expired, acquiring new lock...');
       }
     }
 
-    // Try to acquire lock atomically
-    await firebasePut(`system_locks/${lockKey}`, {
-      locked: true,
-      timestamp: timestamp,
-      startedBy: process.env.VERCEL_URL || 'unknown',
-      instance: process.env.NEXT_RUNTIME || 'vercel'
-    });
+    // Try to acquire lock - use PUT to overwrite any existing lock
+    try {
+      await firebasePut(`system_locks/${lockKey}`, {
+        locked: true,
+        timestamp: timestamp,
+        startedBy: process.env.VERCEL_URL || 'unknown',
+        instance: process.env.NEXT_RUNTIME || 'vercel'
+      });
+      console.log('🔒 Lock acquired successfully');
+    } catch (error) {
+      // If we can't acquire the lock (423 error), check if it's because of an existing lock
+      if (error.response && error.response.status === 423) {
+        // Check the existing lock
+        const existingLock = await firebaseGet(`system_locks/${lockKey}`);
+        if (existingLock && existingLock.locked) {
+          const lockAge = timestamp - (existingLock.timestamp || 0);
+          if (lockAge < 300000) {
+            console.log(`⏭️ Lock exists (age: ${Math.round(lockAge/1000)}s), skipping...`);
+            return res.status(200).json({
+              success: true,
+              message: 'Skipped - lock exists',
+              skipped: true,
+              lockAge: Math.round(lockAge/1000)
+            });
+          }
+        }
+        // If lock is expired, try again with force
+        console.log('🔄 Retrying to acquire lock (force)...');
+        await firebasePut(`system_locks/${lockKey}`, {
+          locked: true,
+          timestamp: timestamp,
+          startedBy: process.env.VERCEL_URL || 'unknown',
+          instance: process.env.NEXT_RUNTIME || 'vercel',
+          force: true
+        });
+      } else {
+        throw error;
+      }
+    }
 
     // Get all medications
     const medications = await firebaseGet('medications');
@@ -476,7 +520,7 @@ app.get('/api/scheduler', async (req, res) => {
 
     console.log(`✅ Sent ${remindersSent} reminders, processed ${delayedRemindersProcessed} delayed reminders`);
     
-    // Keep lock active for 5 minutes to prevent duplicate runs
+    // Update lock with completion status
     await firebasePut(`system_locks/${lockKey}`, {
       locked: true,
       timestamp: timestamp,
