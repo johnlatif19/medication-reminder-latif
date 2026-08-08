@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>لوحة التحكم</title>
+    <title>لوحة التحكم - نظام تذكير الأدوية</title>
     <style>
         * {
             margin: 0;
@@ -202,6 +202,32 @@
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 15px;
+        }
+        
+        .filter-section {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 30px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        
+        .filter-section input {
+            padding: 10px 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            flex: 1;
+            min-width: 150px;
+        }
+        
+        .filter-section input:focus {
+            outline: none;
+            border-color: #667eea;
         }
         
         .medications-grid {
@@ -478,6 +504,11 @@
 
         <!-- Medications Tab -->
         <div id="tab-medications" class="tab-content active">
+            <div class="filter-section">
+                <input type="date" id="filterDate">
+                <button class="btn btn-primary" onclick="applyFilter()">🔍 تصفية</button>
+                <button class="btn btn-secondary" onclick="resetFilter()">🔄 إعادة تعيين</button>
+            </div>
             <div class="card">
                 <h3>📋 قائمة الأدوية</h3>
                 <div id="medicationsList"></div>
@@ -578,6 +609,7 @@
         let currentTab = 'medications';
         let medications = [];
         let patients = [];
+        let filteredMedications = [];
 
         // ============ TOAST NOTIFICATIONS ============
         function showToast(message, type = 'success') {
@@ -666,7 +698,9 @@
                 const response = await fetch('/api/medications');
                 const data = await response.json();
                 medications = data;
+                filteredMedications = data;
                 renderMedications(data);
+                updateStats(data);
             } catch (error) {
                 console.error('Error loading medications:', error);
                 document.getElementById('medicationsList').innerHTML = `
@@ -721,6 +755,28 @@
             `;
         }
 
+        function updateStats(meds) {
+            const total = meds.length;
+            const taken = meds.filter(m => m.taken).length;
+            const pending = total - taken;
+            
+            // Update stats in the filter section
+            const statsDiv = document.querySelector('.filter-section');
+            // Remove old stats if any
+            const oldStats = statsDiv.querySelector('.stats-inline');
+            if (oldStats) oldStats.remove();
+            
+            // Add new stats
+            const statsHTML = `
+                <div class="stats-inline" style="display: flex; gap: 15px; margin-right: auto; font-size: 14px;">
+                    <span style="background: #e3f2fd; padding: 5px 12px; border-radius: 20px;">📊 الإجمالي: ${total}</span>
+                    <span style="background: #d4edda; padding: 5px 12px; border-radius: 20px;">✅ تم التناول: ${taken}</span>
+                    <span style="background: #fff3cd; padding: 5px 12px; border-radius: 20px;">⏳ متبقي: ${pending}</span>
+                </div>
+            `;
+            statsDiv.insertAdjacentHTML('afterbegin', statsHTML);
+        }
+
         async function markTaken(id) {
             if (!confirm('هل أنت متأكد من تناول هذا الدواء؟')) return;
             
@@ -767,6 +823,44 @@
             }
         }
 
+        // ============ FILTER FUNCTIONS ============
+        async function applyFilter() {
+            const date = document.getElementById('filterDate').value;
+            
+            if (!date) {
+                showToast('❌ الرجاء اختيار التاريخ', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/medications/filter', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ date })
+                });
+                
+                const data = await response.json();
+                filteredMedications = data;
+                renderMedications(data);
+                updateStats(data);
+                
+                showToast(`✅ تم تصفية الأدوية بتاريخ ${date}`, 'success');
+            } catch (error) {
+                console.error('Error filtering:', error);
+                showToast('❌ حدث خطأ في التصفية', 'error');
+            }
+        }
+
+        function resetFilter() {
+            document.getElementById('filterDate').value = '';
+            filteredMedications = medications;
+            renderMedications(medications);
+            updateStats(medications);
+            showToast('🔄 تم إعادة تعيين التصفية', 'info');
+        }
+
         // ============ PATIENT CRUD ============
         document.getElementById('patientForm').addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -785,7 +879,7 @@
                 const data = await response.json();
                 
                 if (response.ok && data.success) {
-                    showToast('✅ تم إضافة المريض بنجاح');
+                    showToast('✅ تم إضافة المريض بنجاح وإرسال رسالة الترحيب');
                     closeModal('patientModal');
                     loadPatients();
                 } else {
@@ -877,10 +971,7 @@
                 const response = await fetch('/api/telegram/test', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        chatId, 
-                        message: '🔔 هذه رسالة اختبارية من نظام تذكير الأدوية' 
-                    })
+                    body: JSON.stringify({ chatId })
                 });
 
                 const data = await response.json();
@@ -984,6 +1075,9 @@
         checkAuth();
         loadMedications();
         loadPatients();
+
+        // Set default filter date to today
+        document.getElementById('filterDate').value = new Date().toISOString().split('T')[0];
 
         // Auto refresh every 30 seconds
         setInterval(() => {
