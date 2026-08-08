@@ -203,36 +203,32 @@ ${patientName}
   }
 }
 
-// ============ TIME CHECK ROUTE ============
-app.get('/api/time', async (req, res) => {
-  const now = new Date();
-  const cairoTime = new Date(now.toLocaleString('en-US', { timeZone: 'Africa/Cairo' }));
-  
-  res.json({
-    utc: now.toISOString(),
-    cairo: cairoTime.toISOString(),
-    cairoTime: cairoTime.getHours().toString().padStart(2, '0') + ':' + 
-               cairoTime.getMinutes().toString().padStart(2, '0'),
-    cairoDate: cairoTime.toISOString().split('T')[0],
-    timezone: 'Africa/Cairo'
-  });
-});
+// ============ SCHEDULER ROUTE (called by Cloudflare Worker) ============
+let lastSchedulerRun = 0;
+const MIN_INTERVAL = 60000; // 60 seconds
 
-// ============ SCHEDULER ROUTE FOR VERCEL CRON ============
 app.get('/api/scheduler', async (req, res) => {
   try {
+    // Prevent duplicate runs within 60 seconds
+    const now = Date.now();
+    if (now - lastSchedulerRun < MIN_INTERVAL) {
+      console.log('Scheduler already ran recently, skipping...');
+      return res.status(200).json({
+        success: true,
+        message: 'Skipped - already ran recently',
+        skipped: true
+      });
+    }
+    lastSchedulerRun = now;
+    
     console.log('Running scheduled task...');
     
-    // Use Cairo timezone (Africa/Cairo)
-    const now = new Date();
-    const cairoTime = new Date(now.toLocaleString('en-US', { timeZone: 'Africa/Cairo' }));
-    
+    const cairoTime = new Date(new Date().toLocaleString('en-US', { timeZone: 'Africa/Cairo' }));
     const currentTime = cairoTime.getHours().toString().padStart(2, '0') + ':' + 
                         cairoTime.getMinutes().toString().padStart(2, '0');
     const currentDate = cairoTime.toISOString().split('T')[0];
     
-    console.log(`Checking medications for ${currentDate} at ${currentTime} (Cairo time)`);
-    console.log(`UTC time: ${now.toISOString()}`);
+    console.log(`Checking medications for ${currentDate} at ${currentTime}`);
     
     const medications = await firebaseGet('medications');
     let remindersSent = 0;
@@ -257,7 +253,6 @@ app.get('/api/scheduler', async (req, res) => {
       }
     }
     
-    console.log(`Matched medications: ${matchedMeds.length}`);
     console.log(`Sent ${remindersSent} reminders`);
     
     res.status(200).json({ 
@@ -266,7 +261,6 @@ app.get('/api/scheduler', async (req, res) => {
       remindersSent: remindersSent,
       time: currentTime,
       date: currentDate,
-      cairoTime: cairoTime.toISOString(),
       matchedMedications: matchedMeds.map(m => m.name),
       totalMedications: Object.keys(medications).length
     });
@@ -277,6 +271,21 @@ app.get('/api/scheduler', async (req, res) => {
       error: error.message 
     });
   }
+});
+
+// ============ TIME CHECK ROUTE ============
+app.get('/api/time', async (req, res) => {
+  const now = new Date();
+  const cairoTime = new Date(now.toLocaleString('en-US', { timeZone: 'Africa/Cairo' }));
+  
+  res.json({
+    utc: now.toISOString(),
+    cairo: cairoTime.toISOString(),
+    cairoTime: cairoTime.getHours().toString().padStart(2, '0') + ':' + 
+               cairoTime.getMinutes().toString().padStart(2, '0'),
+    cairoDate: cairoTime.toISOString().split('T')[0],
+    timezone: 'Africa/Cairo'
+  });
 });
 
 // ============ TEST ROUTE ============
