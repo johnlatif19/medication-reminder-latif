@@ -7,6 +7,7 @@ const rateLimit = require('express-rate-limit');
 const cookieParser = require('cookie-parser');
 const path = require('path');
 const axios = require('axios');
+const cron = require('node-cron');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -23,13 +24,13 @@ try {
   process.exit(1);
 }
 
-// Use databaseURL from config or construct it
 const FIREBASE_DATABASE_URL = firebaseConfig.databaseURL || `https://${firebaseConfig.project_id}.firebaseio.com`;
 console.log(`📁 Firebase Database URL: ${FIREBASE_DATABASE_URL}`);
 
 // ============ TELEGRAM SETUP ============
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_API = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`;
+const APP_URL = 'https://medication-reminder-latif.vercel.app';
 
 // ============ MIDDLEWARE ============
 app.use(helmet({ contentSecurityPolicy: false }));
@@ -57,29 +58,13 @@ const authenticateToken = (req, res, next) => {
 };
 
 // ============ HELPER FUNCTIONS ============
-// Check if Firebase is accessible
-async function checkFirebaseConnection() {
-  try {
-    const response = await axios.get(`${FIREBASE_DATABASE_URL}/.json?shallow=true`);
-    return true;
-  } catch (error) {
-    console.error('Firebase connection check failed:', error.message);
-    return false;
-  }
-}
-
 async function firebaseGet(path) {
   try {
     const url = `${FIREBASE_DATABASE_URL}/${path}.json`;
-    console.log(`📡 GET: ${url}`);
     const response = await axios.get(url);
     return response.data || {};
   } catch (error) {
     console.error(`❌ Firebase GET error (${path}):`, error.message);
-    if (error.response) {
-      console.error(`   Status: ${error.response.status}`);
-      console.error(`   Data:`, error.response.data);
-    }
     throw error;
   }
 }
@@ -87,15 +72,10 @@ async function firebaseGet(path) {
 async function firebasePost(path, data) {
   try {
     const url = `${FIREBASE_DATABASE_URL}/${path}.json`;
-    console.log(`📡 POST: ${url}`);
     const response = await axios.post(url, data);
     return response.data;
   } catch (error) {
     console.error(`❌ Firebase POST error (${path}):`, error.message);
-    if (error.response) {
-      console.error(`   Status: ${error.response.status}`);
-      console.error(`   Data:`, error.response.data);
-    }
     throw error;
   }
 }
@@ -103,15 +83,10 @@ async function firebasePost(path, data) {
 async function firebasePut(path, data) {
   try {
     const url = `${FIREBASE_DATABASE_URL}/${path}.json`;
-    console.log(`📡 PUT: ${url}`);
     const response = await axios.put(url, data);
     return response.data;
   } catch (error) {
     console.error(`❌ Firebase PUT error (${path}):`, error.message);
-    if (error.response) {
-      console.error(`   Status: ${error.response.status}`);
-      console.error(`   Data:`, error.response.data);
-    }
     throw error;
   }
 }
@@ -119,44 +94,166 @@ async function firebasePut(path, data) {
 async function firebaseDelete(path) {
   try {
     const url = `${FIREBASE_DATABASE_URL}/${path}.json`;
-    console.log(`📡 DELETE: ${url}`);
     const response = await axios.delete(url);
     return response.data;
   } catch (error) {
     console.error(`❌ Firebase DELETE error (${path}):`, error.message);
-    if (error.response) {
-      console.error(`   Status: ${error.response.status}`);
-      console.error(`   Data:`, error.response.data);
-    }
     throw error;
   }
 }
 
-// ============ DEBUG ROUTE ============
-app.get('/api/debug', async (req, res) => {
-  const isConnected = await checkFirebaseConnection();
-  res.json({
-    firebaseURL: FIREBASE_DATABASE_URL,
-    projectId: firebaseConfig.project_id,
-    isConnected: isConnected,
-    configKeys: Object.keys(firebaseConfig)
-  });
+// ============ TELEGRAM FUNCTIONS ============
+async function sendTelegramMessage(chatId, text, keyboard = null) {
+  try {
+    const payload = {
+      chat_id: chatId,
+      text: text,
+      parse_mode: 'HTML'
+    };
+    if (keyboard) {
+      payload.reply_markup = JSON.stringify({ inline_keyboard: keyboard });
+    }
+    const response = await axios.post(`${TELEGRAM_API}/sendMessage`, payload);
+    return response.data;
+  } catch (error) {
+    console.error('Telegram error:', error.message);
+    throw error;
+  }
+}
+
+// Send welcome message to new patient
+async function sendWelcomeMessage(chatId, patientName) {
+  const message = `👋 مرحباً ${patientName}!
+
+تم تسجيلك في نظام تذكير الأدوية. ستتلقى إشعارات عند مواعيد الأدوية.
+
+لمتابعة الأدوية: ${APP_URL}`;
+  
+  await sendTelegramMessage(chatId, message);
+}
+
+// Send test message
+async function sendTestMessage(chatId) {
+  const message = `🔔 هذه رسالة اختبارية من نظام تذكير الأدوية
+
+لمتابعة الأدوية: ${APP_URL}`;
+  
+  await sendTelegramMessage(chatId, message);
+}
+
+// Send daily summary
+async function sendDailySummary(chatId, date) {
+  const message = `📋 يوم ${date} خلص
+
+نبدأ أدوية من بكرة بإذن الله
+
+لمتابعة الأدوية: ${APP_URL}`;
+  
+  await sendTelegramMessage(chatId, message);
+}
+
+// Send medication reminder
+async function sendMedicationReminder(medication, patientName = 'المريض') {
+  const message = `🔔 تذكير بتناول الدواء
+
+👤 ${patientName}
+💊 ${medication.name}
+💉 الجرعة: ${medication.dosage}
+🕐 الموعد: ${medication.time}
+📅 التاريخ: ${medication.date}
+
+يرجى تناول الدواء في الموعد المحدد
+
+لمتابعة الأدوية: ${APP_URL}`;
+  
+  const patients = await firebaseGet('patients');
+  for (const [id, patient] of Object.entries(patients)) {
+    if (patient.chatId) {
+      try {
+        await sendTelegramMessage(patient.chatId, message, [
+          [
+            { text: '✅ تم التناول', callback_data: `taken_${medication.id}` },
+            { text: '⏰ تذكير بعد 10 دقائق', callback_data: `remind_later_${medication.id}` }
+          ]
+        ]);
+      } catch (err) {
+        console.error(`Failed to send reminder to ${patient.name}:`, err);
+      }
+    }
+  }
+}
+
+// Send medication taken notification
+async function notifyMedicationTaken(medication, patientName = 'المريض') {
+  const message = `✅ تم تناول الدواء
+
+👤 ${patientName}
+💊 ${medication.name}
+💉 الجرعة: ${medication.dosage}
+🕐 الوقت: ${medication.time}
+📅 التاريخ: ${medication.date}
+
+✅ تم التأكيد: ${new Date().toLocaleString('ar')}
+
+لمتابعة الأدوية: ${APP_URL}`;
+  
+  const patients = await firebaseGet('patients');
+  for (const [id, patient] of Object.entries(patients)) {
+    if (patient.chatId) {
+      try {
+        await sendTelegramMessage(patient.chatId, message);
+      } catch (err) {
+        console.error(`Failed to send to ${patient.name}:`, err);
+      }
+    }
+  }
+}
+
+// ============ CRON JOB FOR DAILY REMINDERS ============
+// Check every minute for medications that need reminders
+cron.schedule('* * * * *', async () => {
+  try {
+    console.log('⏰ Running scheduler...');
+    const now = new Date();
+    const currentTime = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
+    const currentDate = now.toISOString().split('T')[0];
+    
+    const medications = await firebaseGet('medications');
+    
+    for (const [id, med] of Object.entries(medications)) {
+      // Check if medication is active, not taken, and matches current time and date
+      if (med.active && !med.taken && med.time === currentTime && med.date === currentDate) {
+        // Check if reminder already sent for this medication today
+        const reminderKey = `reminder_${id}_${currentDate}`;
+        const reminderSent = await firebaseGet(`reminders/${reminderKey}`);
+        
+        if (!reminderSent) {
+          console.log(`🔔 Sending reminder for: ${med.name} at ${currentTime}`);
+          await sendMedicationReminder({ id, ...med });
+          // Mark reminder as sent
+          await firebasePut(`reminders/${reminderKey}`, { 
+            sent: true, 
+            timestamp: new Date().toISOString() 
+          });
+        }
+      }
+    }
+  } catch (error) {
+    console.error('❌ Scheduler error:', error.message);
+  }
 });
 
 // ============ TEST ROUTE ============
 app.get('/api/test-firebase', async (req, res) => {
   console.log('🔍 Testing Firebase connection...');
-  console.log(`📡 URL: ${FIREBASE_DATABASE_URL}`);
-  
   try {
-    // First, check if we can access the database
     const testData = { 
       timestamp: new Date().toISOString(), 
       status: 'connected',
       test: 'Hello from Vercel!'
     };
     
-    const result = await firebasePut('test_connection', testData);
+    await firebasePut('test_connection', testData);
     const data = await firebaseGet('test_connection');
     
     res.json({ 
@@ -170,8 +267,7 @@ app.get('/api/test-firebase', async (req, res) => {
     res.status(500).json({ 
       success: false, 
       error: error.message,
-      databaseURL: FIREBASE_DATABASE_URL,
-      suggestion: 'Check if Realtime Database is enabled in Firebase Console'
+      databaseURL: FIREBASE_DATABASE_URL
     });
   }
 });
@@ -211,84 +307,6 @@ app.get('/api/check-auth', (req, res) => {
   }
 });
 
-// ============ TELEGRAM FUNCTIONS ============
-async function sendTelegramMessage(chatId, text, keyboard = null) {
-  try {
-    const payload = { chat_id: chatId, text, parse_mode: 'HTML' };
-    if (keyboard) {
-      payload.reply_markup = JSON.stringify({ inline_keyboard: keyboard });
-    }
-    const response = await axios.post(`${TELEGRAM_API}/sendMessage`, payload);
-    return response.data;
-  } catch (error) {
-    console.error('Telegram error:', error.message);
-    throw error;
-  }
-}
-
-async function notifyMedicationTaken(medication, patientName = 'المريض') {
-  const message = `
-✅ <b>تم تناول الدواء</b>
-
-👤 ${patientName}
-💊 ${medication.name}
-💉 الجرعة: ${medication.dosage}
-🕐 الوقت: ${medication.time}
-📅 التاريخ: ${medication.date}
-
-✅ تم التأكيد: ${new Date().toLocaleString('ar')}
-  `;
-  
-  try {
-    const patients = await firebaseGet('patients');
-    for (const [id, patient] of Object.entries(patients)) {
-      if (patient.chatId) {
-        try {
-          await sendTelegramMessage(patient.chatId, message);
-        } catch (err) {
-          console.error(`Failed to send to ${patient.name}:`, err);
-        }
-      }
-    }
-  } catch (error) {
-    console.error('Error getting patients:', error);
-  }
-}
-
-async function sendReminder(medication, patientName = 'المريض') {
-  const message = `
-🔔 <b>تذكير بتناول الدواء</b>
-
-👤 ${patientName}
-💊 ${medication.name}
-💉 الجرعة: ${medication.dosage}
-🕐 الموعد: ${medication.time}
-📅 التاريخ: ${medication.date}
-
-⚠️ يرجى تناول الدواء في الموعد المحدد
-  `;
-  
-  try {
-    const patients = await firebaseGet('patients');
-    for (const [id, patient] of Object.entries(patients)) {
-      if (patient.chatId) {
-        try {
-          await sendTelegramMessage(patient.chatId, message, [
-            [
-              { text: '✅ تم التناول', callback_data: `taken_${medication.id}` },
-              { text: '⏰ تذكير بعد 10 دقائق', callback_data: `remind_later_${medication.id}` }
-            ]
-          ]);
-        } catch (err) {
-          console.error(`Failed to send reminder to ${patient.name}:`, err);
-        }
-      }
-    }
-  } catch (error) {
-    console.error('Error getting patients:', error);
-  }
-}
-
 // ============ MEDICATION ROUTES ============
 app.get('/api/medications', async (req, res) => {
   console.log('📊 Fetching medications...');
@@ -313,13 +331,32 @@ app.post('/api/medications/filter', async (req, res) => {
   if (!date) return res.status(400).json({ error: 'الرجاء تحديد التاريخ' });
 
   try {
+    console.log(`🔍 Filtering medications for date: ${date}`);
     const medications = await firebaseGet('medications');
+    const today = new Date().toISOString().split('T')[0];
+    
+    // Get filtered medications
     const filteredMeds = Object.entries(medications)
       .filter(([id, med]) => {
         const medDate = med.date || med.createdAt?.split('T')[0];
         return medDate === date;
       })
       .map(([id, med]) => ({ id, ...med, taken: med.taken || false }));
+    
+    // If filtering for today, send daily summary to all patients
+    if (date === today) {
+      const patients = await firebaseGet('patients');
+      for (const [id, patient] of Object.entries(patients)) {
+        if (patient.chatId) {
+          try {
+            await sendDailySummary(patient.chatId, date);
+          } catch (err) {
+            console.error(`Failed to send summary to ${patient.name}:`, err);
+          }
+        }
+      }
+    }
+    
     res.json(filteredMeds);
   } catch (error) {
     console.error('Error filtering medications:', error);
@@ -346,7 +383,8 @@ app.post('/api/medications', authenticateToken, async (req, res) => {
     const result = await firebasePost('medications', newMed);
     const medicationWithId = { id: result.name, ...newMed };
 
-    sendReminder(medicationWithId).catch(err => console.error('Error sending reminder:', err));
+    // Send reminder immediately
+    await sendMedicationReminder(medicationWithId);
 
     console.log(`✅ Medication added: ${result.name}`);
     res.status(201).json({
@@ -370,17 +408,25 @@ app.put('/api/medications/:id/take', authenticateToken, async (req, res) => {
     const medication = await firebaseGet(`medications/${id}`);
     if (!medication) return res.status(404).json({ error: 'الدواء غير موجود' });
 
-    await firebasePut(`medications/${id}`, { ...medication, taken: true, takenAt: new Date().toISOString() });
-
-    notifyMedicationTaken({ id, ...medication }, patientName || 'المريض').catch(err => {
-      console.error('Error sending notification:', err);
+    await firebasePut(`medications/${id}`, { 
+      ...medication, 
+      taken: true, 
+      takenAt: new Date().toISOString() 
     });
 
+    await notifyMedicationTaken({ id, ...medication }, patientName || 'المريض');
+
     console.log(`✅ Medication marked as taken: ${id}`);
-    res.json({ success: true, message: 'تم تسجيل تناول الدواء وإرسال الإشعار' });
+    res.json({ 
+      success: true, 
+      message: 'تم تسجيل تناول الدواء وإرسال الإشعار' 
+    });
   } catch (error) {
     console.error('❌ Error marking medication as taken:', error.message);
-    res.status(500).json({ error: 'حدث خطأ في تحديث حالة الدواء', details: error.message });
+    res.status(500).json({ 
+      error: 'حدث خطأ في تحديث حالة الدواء', 
+      details: error.message 
+    });
   }
 });
 
@@ -393,7 +439,10 @@ app.delete('/api/medications/:id', authenticateToken, async (req, res) => {
     res.json({ success: true, message: 'تم حذف الدواء بنجاح' });
   } catch (error) {
     console.error('❌ Error deleting medication:', error.message);
-    res.status(500).json({ error: 'حدث خطأ في حذف الدواء', details: error.message });
+    res.status(500).json({ 
+      error: 'حدث خطأ في حذف الدواء', 
+      details: error.message 
+    });
   }
 });
 
@@ -407,7 +456,10 @@ app.get('/api/patients', authenticateToken, async (req, res) => {
     res.json(allPatients);
   } catch (error) {
     console.error('❌ Error fetching patients:', error.message);
-    res.status(500).json({ error: 'حدث خطأ في جلب المرضى', details: error.message });
+    res.status(500).json({ 
+      error: 'حدث خطأ في جلب المرضى', 
+      details: error.message 
+    });
   }
 });
 
@@ -419,12 +471,16 @@ app.post('/api/patients', authenticateToken, async (req, res) => {
 
   try {
     console.log(`👤 Adding patient: ${name} (${chatId})`);
-    const newPatient = { name, chatId, notes: notes || '', createdAt: new Date().toISOString() };
+    const newPatient = { 
+      name, 
+      chatId, 
+      notes: notes || '', 
+      createdAt: new Date().toISOString() 
+    };
     const result = await firebasePost('patients', newPatient);
 
-    sendTelegramMessage(chatId, `👋 مرحباً ${name}!\n\nتم تسجيلك في نظام تذكير الأدوية. ستتلقى إشعارات عند مواعيد الأدوية.`)
-      .then(() => console.log(`✅ Welcome message sent to ${name}`))
-      .catch(err => console.error(`Failed to send welcome to ${name}:`, err));
+    // Send welcome message
+    await sendWelcomeMessage(chatId, name);
 
     console.log(`✅ Patient added: ${result.name}`);
     res.status(201).json({
@@ -435,7 +491,10 @@ app.post('/api/patients', authenticateToken, async (req, res) => {
     });
   } catch (error) {
     console.error('❌ Error adding patient:', error.message);
-    res.status(500).json({ error: 'حدث خطأ في إضافة المريض', details: error.message });
+    res.status(500).json({ 
+      error: 'حدث خطأ في إضافة المريض', 
+      details: error.message 
+    });
   }
 });
 
@@ -448,7 +507,10 @@ app.delete('/api/patients/:id', authenticateToken, async (req, res) => {
     res.json({ success: true, message: 'تم حذف المريض بنجاح' });
   } catch (error) {
     console.error('❌ Error deleting patient:', error.message);
-    res.status(500).json({ error: 'حدث خطأ في حذف المريض', details: error.message });
+    res.status(500).json({ 
+      error: 'حدث خطأ في حذف المريض', 
+      details: error.message 
+    });
   }
 });
 
@@ -459,11 +521,14 @@ app.post('/api/telegram/test', authenticateToken, async (req, res) => {
 
   try {
     console.log(`📨 Testing Telegram: ${chatId}`);
-    await sendTelegramMessage(chatId, message || '🔔 رسالة اختبارية من نظام تذكير الأدوية');
+    await sendTestMessage(chatId);
     res.json({ success: true, message: 'تم إرسال رسالة الاختبار بنجاح' });
   } catch (error) {
     console.error('❌ Telegram test error:', error.message);
-    res.status(500).json({ error: 'فشل إرسال رسالة الاختبار', details: error.message });
+    res.status(500).json({ 
+      error: 'فشل إرسال رسالة الاختبار', 
+      details: error.message 
+    });
   }
 });
 
@@ -474,10 +539,17 @@ app.post('/api/telegram/set-webhook', authenticateToken, async (req, res) => {
 
     console.log(`🔗 Setting webhook: ${url}`);
     const response = await axios.post(`${TELEGRAM_API}/setWebhook`, { url });
-    res.json({ success: true, message: 'تم تعيين Webhook بنجاح', data: response.data });
+    res.json({ 
+      success: true, 
+      message: 'تم تعيين Webhook بنجاح', 
+      data: response.data 
+    });
   } catch (error) {
     console.error('❌ Set webhook error:', error.message);
-    res.status(500).json({ error: 'فشل في تعيين Webhook', details: error.message });
+    res.status(500).json({ 
+      error: 'فشل في تعيين Webhook', 
+      details: error.message 
+    });
   }
 });
 
@@ -488,7 +560,10 @@ app.get('/api/telegram/webhook-info', authenticateToken, async (req, res) => {
     res.json(response.data);
   } catch (error) {
     console.error('❌ Get webhook error:', error.message);
-    res.status(500).json({ error: 'فشل في جلب معلومات Webhook', details: error.message });
+    res.status(500).json({ 
+      error: 'فشل في جلب معلومات Webhook', 
+      details: error.message 
+    });
   }
 });
 
@@ -505,7 +580,11 @@ app.post('/api/webhook/telegram', express.json(), async (req, res) => {
         const medication = await firebaseGet(`medications/${medicationId}`);
 
         if (medication && !medication.taken) {
-          await firebasePut(`medications/${medicationId}`, { ...medication, taken: true, takenAt: new Date().toISOString() });
+          await firebasePut(`medications/${medicationId}`, { 
+            ...medication, 
+            taken: true, 
+            takenAt: new Date().toISOString() 
+          });
           await sendTelegramMessage(chatId, `✅ تم تسجيل تناول ${medication.name}`);
           await notifyMedicationTaken({ id: medicationId, ...medication });
         } else if (medication && medication.taken) {
@@ -520,7 +599,7 @@ app.post('/api/webhook/telegram', express.json(), async (req, res) => {
         setTimeout(async () => {
           const medication = await firebaseGet(`medications/${medicationId}`);
           if (medication && !medication.taken) {
-            await sendReminder({ id: medicationId, ...medication });
+            await sendMedicationReminder({ id: medicationId, ...medication });
           }
         }, 10 * 60 * 1000);
       }
@@ -544,7 +623,10 @@ app.get('/dashboard', (req, res) => res.sendFile(path.join(__dirname, 'public', 
 // ============ ERROR HANDLING ============
 app.use((err, req, res, next) => {
   console.error('❌ Unhandled error:', err.stack);
-  res.status(500).json({ error: 'حدث خطأ في الخادم', details: err.message });
+  res.status(500).json({ 
+    error: 'حدث خطأ في الخادم', 
+    details: err.message 
+  });
 });
 
 // ============ START SERVER ============
@@ -554,5 +636,6 @@ app.listen(PORT, () => {
   console.log(`📁 Firebase URL: ${FIREBASE_DATABASE_URL}`);
   console.log(`📋 Admin: ${process.env.ADMIN_USERNAME}`);
   console.log(`🤖 Telegram: ${TELEGRAM_BOT_TOKEN ? '✅' : '❌'}`);
+  console.log(`🔗 App URL: ${APP_URL}`);
   console.log('='.repeat(50));
 });
