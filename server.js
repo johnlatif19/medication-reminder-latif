@@ -7,7 +7,6 @@ const rateLimit = require('express-rate-limit');
 const cookieParser = require('cookie-parser');
 const path = require('path');
 const axios = require('axios');
-const cron = require('node-cron');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -204,15 +203,18 @@ ${patientName}
   }
 }
 
-// ============ CRON JOB FOR DAILY REMINDERS ============
-cron.schedule('* * * * *', async () => {
+// ============ SCHEDULER ROUTE FOR VERCEL CRON ============
+app.get('/api/scheduler', async (req, res) => {
   try {
-    console.log('Running scheduler...');
+    console.log('Running scheduled task...');
     const now = new Date();
     const currentTime = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
     const currentDate = now.toISOString().split('T')[0];
     
+    console.log(`Checking medications for ${currentDate} at ${currentTime}`);
+    
     const medications = await firebaseGet('medications');
+    let remindersSent = 0;
     
     for (const [id, med] of Object.entries(medications)) {
       if (med.active && !med.taken && med.time === currentTime && med.date === currentDate) {
@@ -226,11 +228,25 @@ cron.schedule('* * * * *', async () => {
             sent: true, 
             timestamp: new Date().toISOString() 
           });
+          remindersSent++;
         }
       }
     }
+    
+    console.log(`Sent ${remindersSent} reminders`);
+    res.status(200).json({ 
+      success: true, 
+      message: 'Scheduler executed',
+      remindersSent: remindersSent,
+      time: currentTime,
+      date: currentDate
+    });
   } catch (error) {
     console.error('Scheduler error:', error.message);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
   }
 });
 
@@ -326,7 +342,6 @@ app.post('/api/medications/filter', async (req, res) => {
     const medications = await firebaseGet('medications');
     const today = new Date().toISOString().split('T')[0];
     
-    // Reset all medications for this date to 'not taken' status
     for (const [id, med] of Object.entries(medications)) {
       const medDate = med.date || med.createdAt?.split('T')[0];
       if (medDate === date && med.taken === true) {
@@ -334,7 +349,6 @@ app.post('/api/medications/filter', async (req, res) => {
       }
     }
     
-    // Get updated medications after reset
     const updatedMedications = await firebaseGet('medications');
     const filteredMeds = Object.entries(updatedMedications)
       .filter(([id, med]) => {
@@ -343,7 +357,6 @@ app.post('/api/medications/filter', async (req, res) => {
       })
       .map(([id, med]) => ({ id, ...med, taken: med.taken || false }));
     
-    // If filtering for today, send daily summary to all patients
     if (date === today) {
       const patients = await firebaseGet('patients');
       for (const [id, patient] of Object.entries(patients)) {
@@ -381,8 +394,6 @@ app.post('/api/medications', authenticateToken, async (req, res) => {
     };
 
     const result = await firebasePost('medications', newMed);
-    
-    // Don't send reminder here - will be sent by scheduler at the specified time
 
     console.log(`Medication added: ${result.name}`);
     res.status(201).json({
