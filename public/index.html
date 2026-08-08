@@ -258,7 +258,7 @@
     <div class="header">
         <div class="header-content">
             <div>
-                <h1>💊 جدول الأدوية</h1>
+                <h1>جدول الأدوية</h1>
                 <div class="date" id="currentDate"></div>
             </div>
         </div>
@@ -282,8 +282,8 @@
 
         <div class="filter-section">
             <input type="date" id="filterDate">
-            <button class="btn btn-primary" onclick="applyFilter()">🔍 تصفية</button>
-            <button class="btn btn-secondary" onclick="resetFilter()">🔄 عرض الكل</button>
+            <button class="btn btn-primary" onclick="applyFilter()">تصفية</button>
+            <button class="btn btn-secondary" onclick="resetFilter()">عرض الكل</button>
         </div>
 
         <div class="medications-grid" id="medicationsGrid"></div>
@@ -316,7 +316,6 @@
                 console.error('Error loading medications:', error);
                 document.getElementById('medicationsGrid').innerHTML = `
                     <div class="empty-state">
-                        <div class="icon">⚠️</div>
                         <h3>حدث خطأ في تحميل البيانات</h3>
                         <p>يرجى المحاولة مرة أخرى</p>
                     </div>
@@ -330,7 +329,6 @@
             if (!medications || medications.length === 0) {
                 grid.innerHTML = `
                     <div class="empty-state">
-                        <div class="icon">💊</div>
                         <h3>لا توجد أدوية</h3>
                         <p>سيتم عرض الأدوية هنا عند إضافتها</p>
                     </div>
@@ -341,13 +339,13 @@
             grid.innerHTML = medications.map(med => `
                 <div class="medication-card ${med.taken ? 'taken' : ''}">
                     <div class="med-name">${med.name}</div>
-                    <div class="med-dosage">💉 ${med.dosage}</div>
-                    <div class="med-time">🕐 ${med.time || 'غير محدد'}</div>
-                    <div class="med-date">📅 ${med.date || 'غير محدد'}</div>
-                    ${med.notes ? `<div class="med-notes">📝 ${med.notes}</div>` : ''}
+                    <div class="med-dosage"> ${med.dosage}</div>
+                    <div class="med-time"> ${med.time || 'غير محدد'}</div>
+                    <div class="med-date"> ${med.date || 'غير محدد'}</div>
+                    ${med.notes ? `<div class="med-notes"> ${med.notes}</div>` : ''}
                     <div>
                         <span class="status ${med.taken ? 'status-taken' : 'status-pending'}">
-                            ${med.taken ? '✅ تم التناول' : '⏳ في الانتظار'}
+                            ${med.taken ? ' تم التناول' : ' في الانتظار'}
                         </span>
                     </div>
                 </div>
@@ -396,8 +394,8 @@
             updateStats(allMedications);
         }
         
-        // Auto refresh every 30 seconds
-        setInterval(loadMedications, 30000);
+        // Auto refresh every 3 seconds
+        setInterval(loadMedications, 3000);
         
         // Load on page load
         loadMedications();
