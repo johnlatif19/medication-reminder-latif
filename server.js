@@ -1,1031 +1,863 @@
-require('dotenv').config();
 const express = require('express');
-const jwt = require('jsonwebtoken');
-const cors = require('cors');
-const helmet = require('helmet');
-const rateLimit = require('express-rate-limit');
 const cookieParser = require('cookie-parser');
-const path = require('path');
+const cors = require('cors');
+const jwt = require('jsonwebtoken');
+const admin = require('firebase-admin');
 const axios = require('axios');
+const moment = require('moment-timezone');
+const cron = require('node-cron');
+require('dotenv').config();
 
 const app = express();
+const PORT = process.env.PORT || 3000;
 
-// ============ FIREBASE SETUP ============
-console.log('Initializing Firebase...');
+// Middleware
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
+app.use(cors({
+  origin: true,
+  credentials: true
+}));
 
-let firebaseConfig;
+// Serve static files
+app.use(express.static('public'));
+
+// Initialize Firebase
+let firebaseInitialized = false;
+let db;
+
 try {
-  firebaseConfig = JSON.parse(process.env.FIREBASE_CONFIG);
-  console.log('Firebase config parsed successfully');
+  if (process.env.FIREBASE_CONFIG) {
+    const firebaseConfig = JSON.parse(process.env.FIREBASE_CONFIG);
+    admin.initializeApp({
+      credential: admin.credential.cert(firebaseConfig)
+    });
+    db = admin.database();
+    firebaseInitialized = true;
+    console.log('Firebase initialized successfully');
+  } else {
+    console.warn('FIREBASE_CONFIG not found in environment variables');
+  }
 } catch (error) {
-  console.error('Failed to parse FIREBASE_CONFIG:', error.message);
-  process.exit(1);
+  console.error('Failed to initialize Firebase:', error);
 }
 
-const FIREBASE_DATABASE_URL = firebaseConfig.databaseURL || `https://${firebaseConfig.project_id}.firebaseio.com`;
-console.log(`Firebase Database URL: ${FIREBASE_DATABASE_URL}`);
-
-// ============ TELEGRAM SETUP ============
+// Constants
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const TELEGRAM_API = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`;
-// IMPORTANT: Use real URL, not markdown
-const APP_URL = process.env.APP_URL || 'https://medication-reminder-latif.vercel.app';
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
+const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'admin';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'SecurePass123!';
+const TIMEZONE = 'Africa/Cairo';
 
-// ============ MIDDLEWARE ============
-// Helmet for security headers
-app.use(helmet({ 
-  contentSecurityPolicy: false,
-  crossOriginEmbedderPolicy: false 
-}));
+// Default medications
+const DEFAULT_MEDICATIONS = [
+  { name: 'ايزابريل', time: '12:50', timezone: TIMEZONE },
+  { name: 'بانتوبي/بيرولوك', time: '13:07', timezone: TIMEZONE },
+  { name: 'ايجيبرو', time: '15:57', timezone: TIMEZONE },
+  { name: 'جوسبرين', time: '17:08', timezone: TIMEZONE },
+  { name: 'اتور', time: '13:35', timezone: TIMEZONE },
+  { name: 'بلافيكس', time: '13:42', timezone: TIMEZONE }
+];
 
-// CORS - محدود و آمن
-app.use(cors({
-  origin: process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : ['http://localhost:3000', 'https://medication-reminder-latif.vercel.app'],
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Cookie']
-}));
+// Default patient
+const DEFAULT_PATIENT = {
+  name: 'لطيف',
+  telegramId: null,
+  isActive: true,
+  createdAt: new Date().toISOString()
+};
 
-app.use(express.json());
-app.use(cookieParser());
-app.use(express.static(path.join(__dirname, 'public')));
+// Initialize default data
+async function initializeDefaultData() {
+  if (!firebaseInitialized) return;
 
-// ============ RATE LIMITERS ============
-// 1. General API rate limiter - 300 requests per 15 minutes
-const apiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 300,
-  standardHeaders: true, // Return rate limit info in headers
-  legacyHeaders: false, // Disable X-RateLimit-* headers
-  message: {
-    error: 'تم تجاوز عدد الطلبات المسموح بها، يرجى المحاولة بعد 15 دقيقة',
-    retryAfter: '15 دقيقة'
-  },
-  skip: (req) => {
-    // Skip rate limiting for scheduler and webhook
-    return req.path === '/api/scheduler' || 
-           req.path === '/api/webhook/telegram' ||
-           req.path === '/api/time';
-  }
-});
-
-// 2. Strict login rate limiter - 5 attempts per 15 minutes
-const loginLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: {
-    error: 'محاولات تسجيل دخول كثيرة جداً، يرجى المحاولة بعد 15 دقيقة',
-    retryAfter: '15 دقيقة'
-  }
-});
-
-app.use('/api/', apiLimiter);
-app.use('/api/login', loginLimiter);
-
-// ============ AUTH MIDDLEWARE ============
-const authenticateToken = (req, res, next) => {
-  const token = req.cookies.token || req.headers.authorization?.split(' ')[1];
-  if (!token) {
-    return res.status(401).json({ error: 'غير مصرح به - الرجاء تسجيل الدخول' });
-  }
   try {
-    req.user = jwt.verify(token, process.env.JWT_SECRET);
+    // Check if medications exist
+    const medsRef = db.ref('medications');
+    const medsSnapshot = await medsRef.once('value');
+    if (!medsSnapshot.exists()) {
+      console.log('Adding default medications...');
+      const updates = {};
+      DEFAULT_MEDICATIONS.forEach((med, index) => {
+        updates[index] = {
+          ...med,
+          id: `med_${Date.now()}_${index}`,
+          taken: false,
+          lastTaken: null,
+          createdAt: new Date().toISOString()
+        };
+      });
+      await medsRef.update(updates);
+      console.log('Default medications added');
+    }
+
+    // Check if patient exists
+    const patientsRef = db.ref('patients');
+    const patientsSnapshot = await patientsRef.once('value');
+    if (!patientsSnapshot.exists()) {
+      console.log('Adding default patient...');
+      await patientsRef.push({
+        ...DEFAULT_PATIENT,
+        id: `patient_${Date.now()}`
+      });
+      console.log('Default patient added');
+    }
+  } catch (error) {
+    console.error('Error initializing default data:', error);
+  }
+}
+
+// Middleware to verify JWT
+const authenticateToken = (req, res, next) => {
+  const token = req.cookies.token;
+  if (!token) {
+    return res.status(401).json({ error: 'Unauthorized - No token provided' });
+  }
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    req.user = decoded;
     next();
   } catch (error) {
-    if (error.name === 'TokenExpiredError') {
-      res.status(403).json({ error: 'انتهت صلاحية الجلسة، الرجاء تسجيل الدخول مرة أخرى' });
-    } else {
-      res.status(403).json({ error: 'جلسة غير صالحة' });
-    }
+    return res.status(401).json({ error: 'Unauthorized - Invalid token' });
   }
 };
 
-// ============ FIREBASE HELPER FUNCTIONS ============
-// Using a single axios instance with timeout
-const firebaseAxios = axios.create({
-  timeout: 10000, // 10 seconds timeout
-  headers: {
-    'Content-Type': 'application/json'
+// Helper function to send Telegram message
+async function sendTelegramMessage(chatId, text, replyMarkup = null) {
+  if (!TELEGRAM_BOT_TOKEN) {
+    console.error('TELEGRAM_BOT_TOKEN not configured');
+    return false;
   }
-});
 
-async function firebaseGet(path) {
   try {
-    const url = `${FIREBASE_DATABASE_URL}/${path}.json`;
-    const response = await firebaseAxios.get(url);
-    return response.data || {};
-  } catch (error) {
-    if (error.code === 'ECONNABORTED') {
-      console.error(`Firebase GET timeout (${path})`);
-      throw new Error('انتهت مهلة الاتصال بقاعدة البيانات');
-    }
-    console.error(`Firebase GET error (${path}):`, error.message);
-    if (error.response) {
-      console.error('Response status:', error.response.status);
-      console.error('Response data:', error.response.data);
-    }
-    throw new Error(`خطأ في جلب البيانات: ${error.message}`);
-  }
-}
-
-async function firebasePost(path, data) {
-  try {
-    const url = `${FIREBASE_DATABASE_URL}/${path}.json`;
-    const response = await firebaseAxios.post(url, data);
-    return response.data;
-  } catch (error) {
-    if (error.code === 'ECONNABORTED') {
-      console.error(`Firebase POST timeout (${path})`);
-      throw new Error('انتهت مهلة الاتصال بقاعدة البيانات');
-    }
-    console.error(`Firebase POST error (${path}):`, error.message);
-    if (error.response) {
-      console.error('Response status:', error.response.status);
-      console.error('Response data:', error.response.data);
-    }
-    throw new Error(`خطأ في إضافة البيانات: ${error.message}`);
-  }
-}
-
-async function firebasePut(path, data) {
-  try {
-    const url = `${FIREBASE_DATABASE_URL}/${path}.json`;
-    const response = await firebaseAxios.put(url, data);
-    return response.data;
-  } catch (error) {
-    if (error.code === 'ECONNABORTED') {
-      console.error(`Firebase PUT timeout (${path})`);
-      throw new Error('انتهت مهلة الاتصال بقاعدة البيانات');
-    }
-    console.error(`Firebase PUT error (${path}):`, error.message);
-    if (error.response) {
-      console.error('Response status:', error.response.status);
-      console.error('Response data:', error.response.data);
-    }
-    throw new Error(`خطأ في تحديث البيانات: ${error.message}`);
-  }
-}
-
-async function firebaseDelete(path) {
-  try {
-    const url = `${FIREBASE_DATABASE_URL}/${path}.json`;
-    const response = await firebaseAxios.delete(url);
-    return response.data;
-  } catch (error) {
-    if (error.code === 'ECONNABORTED') {
-      console.error(`Firebase DELETE timeout (${path})`);
-      throw new Error('انتهت مهلة الاتصال بقاعدة البيانات');
-    }
-    console.error(`Firebase DELETE error (${path}):`, error.message);
-    if (error.response) {
-      console.error('Response status:', error.response.status);
-      console.error('Response data:', error.response.data);
-    }
-    throw new Error(`خطأ في حذف البيانات: ${error.message}`);
-  }
-}
-
-// ============ TELEGRAM FUNCTIONS ============
-const telegramAxios = axios.create({
-  timeout: 15000, // 15 seconds timeout
-  headers: {
-    'Content-Type': 'application/json'
-  }
-});
-
-async function sendTelegramMessage(chatId, text, keyboard = null) {
-  try {
+    const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
     const payload = {
       chat_id: chatId,
       text: text,
       parse_mode: 'HTML'
     };
-    if (keyboard) {
-      payload.reply_markup = JSON.stringify({ inline_keyboard: keyboard });
+
+    if (replyMarkup) {
+      payload.reply_markup = replyMarkup;
     }
-    const response = await telegramAxios.post(`${TELEGRAM_API}/sendMessage`, payload);
-    return response.data;
+
+    const response = await axios.post(url, payload);
+    return response.data.ok;
   } catch (error) {
-    if (error.code === 'ECONNABORTED') {
-      console.error('Telegram timeout for chatId:', chatId);
-      throw new Error('انتهت مهلة الاتصال بـ Telegram');
-    }
-    if (error.response) {
-      console.error('Telegram API error:', error.response.data);
-      if (error.response.data.error_code === 429) {
-        console.error('Rate limited by Telegram, waiting...');
-        await new Promise(resolve => setTimeout(resolve, 5000));
-        // Retry once after waiting
-        return await sendTelegramMessage(chatId, text, keyboard);
-      }
-    }
-    console.error('Telegram error for chatId', chatId, ':', error.message);
-    throw error;
+    console.error('Error sending Telegram message:', error.response?.data || error.message);
+    return false;
   }
 }
 
-async function sendWelcomeMessage(chatId, patientName) {
-  const message = `مرحبا ${patientName}!
-
-تم تسجيلك في نظام تذكير الأدوية. ستتلقى إشعارات عند مواعيد الأدوية.
-
-لمتابعة الأدوية: ${APP_URL}`;
-  
-  try {
-    await sendTelegramMessage(chatId, message);
-  } catch (error) {
-    console.error(`Failed to send welcome message to ${patientName}:`, error.message);
-  }
-}
-
-async function sendTestMessage(chatId) {
-  const message = `هذه رسالة اختبارية من نظام تذكير الأدوية
-
-لمتابعة الأدوية: ${APP_URL}`;
-  
-  try {
-    await sendTelegramMessage(chatId, message);
-  } catch (error) {
-    console.error('Failed to send test message:', error.message);
-    throw error;
-  }
-}
-
-async function sendDailySummary(chatId, date) {
-  const message = `✅ يوم ${date} انتهى
-
-📋 تم تذكير جميع الأدوية المقررة.
-
-غداً إن شاء الله نلتقي مع أدوية جديدة.
-
-لمتابعة الأدوية: ${APP_URL}`;
-  
-  try {
-    await sendTelegramMessage(chatId, message);
-  } catch (error) {
-    console.error(`Failed to send daily summary to ${chatId}:`, error.message);
-  }
-}
-
-// Unified function to send medication reminder to all patients
-async function sendMedicationReminderToAll(medication) {
-  const patients = await firebaseGet('patients');
-  const message = `💊 تذكير بتناول الدواء
-
-الدواء: ${medication.name}
-الجرعة: ${medication.dosage}
-الموعد: ${medication.time}
-التاريخ: ${medication.date}
-
-يرجى تناول الدواء في الموعد المحدد
-
-لمتابعة الأدوية: ${APP_URL}`;
-  
-  const keyboard = [
-    [
-      { text: '✅ تم التناول', callback_data: `taken_${medication.id}` },
-      { text: '⏰ تذكير بعد 10 دقائق', callback_data: `remind_later_${medication.id}` }
+// Helper function to create inline keyboard
+function createMedicationKeyboard(medicationId) {
+  return {
+    inline_keyboard: [
+      [
+        {
+          text: 'تم التناول',
+          callback_data: `take_${medicationId}`
+        },
+        {
+          text: 'تذكير بعد 10 دقائق',
+          callback_data: `remind_${medicationId}`
+        }
+      ]
     ]
-  ];
-
-  let successCount = 0;
-  let failCount = 0;
-
-  for (const [id, patient] of Object.entries(patients)) {
-    if (patient.chatId) {
-      try {
-        await sendTelegramMessage(patient.chatId, message, keyboard);
-        successCount++;
-      } catch (error) {
-        console.error(`Failed to send reminder to ${patient.name} (${patient.chatId}):`, error.message);
-        failCount++;
-      }
-    }
-  }
-
-  console.log(`Sent reminders to ${successCount} patients, failed: ${failCount}`);
-  return { successCount, failCount };
+  };
 }
 
-async function sendMedicationReminderToPatient(chatId, medication) {
-  const message = `💊 تذكير بتناول الدواء
+// Helper function to get medication by ID
+async function getMedicationById(id) {
+  if (!firebaseInitialized) return null;
 
-الدواء: ${medication.name}
-الجرعة: ${medication.dosage}
-الموعد: ${medication.time}
-التاريخ: ${medication.date}
-
-يرجى تناول الدواء في الموعد المحدد
-
-لمتابعة الأدوية: ${APP_URL}`;
-  
-  const keyboard = [
-    [
-      { text: '✅ تم التناول', callback_data: `taken_${medication.id}` },
-      { text: '⏰ تذكير بعد 10 دقائق', callback_data: `remind_later_${medication.id}` }
-    ]
-  ];
-
-  await sendTelegramMessage(chatId, message, keyboard);
-}
-
-async function notifyMedicationTaken(medication) {
-  const patients = await firebaseGet('patients');
-  const message = `✅ تم تناول الدواء
-
-الدواء: ${medication.name}
-الجرعة: ${medication.dosage}
-الوقت: ${medication.time}
-التاريخ: ${medication.date}
-
-تم التأكيد: ${new Date().toLocaleString('ar-EG', { timeZone: 'Africa/Cairo' })}
-
-لمتابعة الأدوية: ${APP_URL}`;
-  
-  for (const [id, patient] of Object.entries(patients)) {
-    if (patient.chatId) {
-      try {
-        await sendTelegramMessage(patient.chatId, message);
-      } catch (error) {
-        console.error(`Failed to notify ${patient.name}:`, error.message);
-      }
-    }
-  }
-}
-
-// ============ SCHEDULER ROUTE ============
-// NOTE: This runs on Vercel Serverless - no memory state
-// Uses Firebase for persistent state to prevent duplicate runs
-app.get('/api/scheduler', async (req, res) => {
   try {
-    console.log('📋 Running scheduler task...');
-    
-    // --- FIX: Reliable Cairo time calculation ---
-    const now = new Date();
-    const formatter = new Intl.DateTimeFormat('en-US', {
-      timeZone: 'Africa/Cairo',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false
+    const medsRef = db.ref('medications');
+    const snapshot = await medsRef.orderByChild('id').equalTo(id).once('value');
+    if (!snapshot.exists()) return null;
+
+    let medication = null;
+    let key = null;
+    snapshot.forEach((childSnapshot) => {
+      medication = childSnapshot.val();
+      key = childSnapshot.key;
     });
-    
-    const parts = formatter.formatToParts(now);
-    const timeParts = {};
-    parts.forEach(({type, value}) => { timeParts[type] = value; });
-    
-    const currentTime = `${timeParts.hour}:${timeParts.minute}`;
-    const currentDate = `${timeParts.year}-${timeParts.month}-${timeParts.day}`;
-    const timestamp = Date.now();
-    
-    console.log(`🕐 Checking medications for ${currentDate} at ${currentTime}`);
-    // --- END FIX ---
+    return { ...medication, key };
+  } catch (error) {
+    console.error('Error getting medication:', error);
+    return null;
+  }
+}
 
-    // Check if we have a reminder lock to prevent concurrent runs
-    const lockKey = `scheduler_lock_${currentDate}_${currentTime}`;
-    
-    // Try to get the lock
-    let lockData;
-    try {
-      lockData = await firebaseGet(`system_locks/${lockKey}`);
-    } catch (error) {
-      // If we can't read the lock, assume it doesn't exist
-      console.log('⚠️ Could not read lock, assuming no lock exists');
-      lockData = null;
-    }
-    
-    // If lock exists and is less than 5 minutes old, skip
-    if (lockData && lockData.locked) {
-      const lockAge = timestamp - (lockData.timestamp || 0);
-      if (lockAge < 300000) { // 5 minutes
-        console.log(`⏭️ Scheduler already ran for this time (lock age: ${Math.round(lockAge/1000)}s), skipping...`);
-        return res.status(200).json({
-          success: true,
-          message: 'Skipped - already processed this time slot',
-          skipped: true,
-          lockAge: Math.round(lockAge/1000)
-        });
-      } else {
-        // Lock is expired, we can overwrite it
-        console.log('🔓 Lock expired, acquiring new lock...');
+// Helper function to get patient by ID
+async function getPatientById(id) {
+  if (!firebaseInitialized) return null;
+
+  try {
+    const patientsRef = db.ref('patients');
+    const snapshot = await patientsRef.once('value');
+    if (!snapshot.exists()) return null;
+
+    let patient = null;
+    let key = null;
+    snapshot.forEach((childSnapshot) => {
+      const data = childSnapshot.val();
+      if (data.id === id) {
+        patient = data;
+        key = childSnapshot.key;
       }
-    }
+    });
+    return { ...patient, key };
+  } catch (error) {
+    console.error('Error getting patient:', error);
+    return null;
+  }
+}
 
-    // Try to acquire lock - use PUT to overwrite any existing lock
-    try {
-      await firebasePut(`system_locks/${lockKey}`, {
-        locked: true,
-        timestamp: timestamp,
-        startedBy: process.env.VERCEL_URL || 'unknown',
-        instance: process.env.NEXT_RUNTIME || 'vercel'
+// Helper function to get all patients
+async function getAllPatients() {
+  if (!firebaseInitialized) return [];
+
+  try {
+    const patientsRef = db.ref('patients');
+    const snapshot = await patientsRef.once('value');
+    if (!snapshot.exists()) return [];
+
+    const patients = [];
+    snapshot.forEach((childSnapshot) => {
+      const data = childSnapshot.val();
+      patients.push({
+        ...data,
+        key: childSnapshot.key,
+        id: data.id || childSnapshot.key
       });
-      console.log('🔒 Lock acquired successfully');
-    } catch (error) {
-      // If we can't acquire the lock (423 error), check if it's because of an existing lock
-      if (error.response && error.response.status === 423) {
-        // Check the existing lock
-        const existingLock = await firebaseGet(`system_locks/${lockKey}`);
-        if (existingLock && existingLock.locked) {
-          const lockAge = timestamp - (existingLock.timestamp || 0);
-          if (lockAge < 300000) {
-            console.log(`⏭️ Lock exists (age: ${Math.round(lockAge/1000)}s), skipping...`);
-            return res.status(200).json({
-              success: true,
-              message: 'Skipped - lock exists',
-              skipped: true,
-              lockAge: Math.round(lockAge/1000)
-            });
-          }
-        }
-        // If lock is expired, try again with force
-        console.log('🔄 Retrying to acquire lock (force)...');
-        await firebasePut(`system_locks/${lockKey}`, {
-          locked: true,
-          timestamp: timestamp,
-          startedBy: process.env.VERCEL_URL || 'unknown',
-          instance: process.env.NEXT_RUNTIME || 'vercel',
-          force: true
-        });
-      } else {
-        throw error;
-      }
-    }
-
-    // Get all medications
-    const medications = await firebaseGet('medications');
-    let remindersSent = 0;
-    let delayedRemindersProcessed = 0;
-    let matchedMeds = [];
-
-    // Process each medication
-    for (const [id, med] of Object.entries(medications)) {
-      // Skip if medication is inactive, already taken, or doesn't match time/date
-      if (!med.active || med.taken || med.time !== currentTime || med.date !== currentDate) {
-        continue;
-      }
-
-      matchedMeds.push({ id, ...med });
-
-      // Check if reminder was already sent for this medication time slot
-      const reminderKey = `reminder_sent_${id}_${currentDate}_${currentTime}`;
-      const reminderSent = await firebaseGet(`reminders/sent/${reminderKey}`);
-
-      if (!reminderSent) {
-        console.log(`💊 Sending reminder for: ${med.name} at ${currentTime}`);
-        
-        // Send to all patients
-        const { successCount, failCount } = await sendMedicationReminderToAll({ id, ...med });
-        remindersSent += successCount;
-
-        // Mark reminder as sent persistently
-        await firebasePut(`reminders/sent/${reminderKey}`, {
-          sent: true,
-          timestamp: new Date().toISOString(),
-          sentTo: successCount,
-          failedTo: failCount
-        });
-
-        // Log medication at this time
-        await firebasePost(`reminders/logs/${id}_${currentDate}_${currentTime}`, {
-          medicationId: id,
-          medicationName: med.name,
-          time: currentTime,
-          date: currentDate,
-          sentAt: new Date().toISOString(),
-          recipients: successCount
-        });
-      }
-
-      // Check for pending delayed reminders (10 minutes later)
-      const delayedReminderKey = `delayed_${id}_${currentDate}`;
-      const delayedReminders = await firebaseGet(`reminders/delayed/${delayedReminderKey}`);
-      
-      if (delayedReminders) {
-        // Process delayed reminders that are due
-        const nowTimestamp = Date.now();
-        for (const [reminderId, reminder] of Object.entries(delayedReminders)) {
-          if (!reminder.sent && reminder.remindAt <= nowTimestamp) {
-            console.log(`⏰ Processing delayed reminder for ${med.name}`);
-            await sendMedicationReminderToAll({ id, ...med });
-            await firebasePut(`reminders/delayed/${delayedReminderKey}/${reminderId}/sent`, true);
-            delayedRemindersProcessed++;
-          }
-        }
-      }
-    }
-
-    console.log(`✅ Sent ${remindersSent} reminders, processed ${delayedRemindersProcessed} delayed reminders`);
-    
-    // Update lock with completion status
-    await firebasePut(`system_locks/${lockKey}`, {
-      locked: true,
-      timestamp: timestamp,
-      completed: true,
-      completedAt: new Date().toISOString(),
-      remindersSent: remindersSent,
-      delayedProcessed: delayedRemindersProcessed
     });
-
-    res.status(200).json({
-      success: true,
-      message: 'Scheduler executed successfully',
-      remindersSent: remindersSent,
-      delayedRemindersProcessed: delayedRemindersProcessed,
-      time: currentTime,
-      date: currentDate,
-      matchedMedications: matchedMeds.map(m => m.name),
-      totalMedications: Object.keys(medications).length
-    });
+    return patients;
   } catch (error) {
-    console.error('🔥 Scheduler error:', error);
-    console.error('Stack trace:', error.stack);
-    res.status(500).json({
-      success: false,
-      error: error.message,
-      stack: process.env.NODE_ENV === 'production' ? undefined : error.stack
+    console.error('Error getting patients:', error);
+    return [];
+  }
+}
+
+// Helper function to get all medications
+async function getAllMedications() {
+  if (!firebaseInitialized) return [];
+
+  try {
+    const medsRef = db.ref('medications');
+    const snapshot = await medsRef.once('value');
+    if (!snapshot.exists()) return [];
+
+    const medications = [];
+    snapshot.forEach((childSnapshot) => {
+      const data = childSnapshot.val();
+      medications.push({
+        ...data,
+        key: childSnapshot.key,
+        id: data.id || childSnapshot.key
+      });
     });
+    return medications;
+  } catch (error) {
+    console.error('Error getting medications:', error);
+    return [];
+  }
+}
+
+// Helper function to get reminders log
+async function getReminderLog(medicationId, date) {
+  if (!firebaseInitialized) return false;
+
+  try {
+    const logRef = db.ref('reminder_log');
+    const snapshot = await logRef
+      .orderByChild('medicationId')
+      .equalTo(medicationId)
+      .once('value');
+
+    if (!snapshot.exists()) return false;
+
+    let exists = false;
+    snapshot.forEach((childSnapshot) => {
+      const log = childSnapshot.val();
+      if (log.date === date) {
+        exists = true;
+      }
+    });
+    return exists;
+  } catch (error) {
+    console.error('Error checking reminder log:', error);
+    return false;
+  }
+}
+
+// Helper function to add reminder log
+async function addReminderLog(medicationId, date) {
+  if (!firebaseInitialized) return false;
+
+  try {
+    const logRef = db.ref('reminder_log');
+    await logRef.push({
+      medicationId,
+      date,
+      sentAt: new Date().toISOString()
+    });
+    return true;
+  } catch (error) {
+    console.error('Error adding reminder log:', error);
+    return false;
+  }
+}
+
+// Scheduler function - check medications and send reminders
+async function runScheduler() {
+  if (!firebaseInitialized) {
+    console.log('Firebase not initialized, skipping scheduler');
+    return;
+  }
+
+  console.log('Running scheduler...');
+
+  try {
+    const now = moment().tz(TIMEZONE);
+    const currentTime = now.format('HH:mm');
+    const today = now.format('YYYY-MM-DD');
+
+    console.log(`Current time (${TIMEZONE}): ${currentTime}`);
+
+    const medications = await getAllMedications();
+    const patients = await getAllPatients();
+
+    if (patients.length === 0) {
+      console.log('No patients found');
+      return;
+    }
+
+    // Filter patients with telegram ID
+    const activePatients = patients.filter(p => p.telegramId && p.isActive !== false);
+
+    if (activePatients.length === 0) {
+      console.log('No active patients with Telegram IDs');
+      return;
+    }
+
+    // Check each medication
+    for (const medication of medications) {
+      // Check if medication time matches current time (within 5 minutes)
+      const medTime = moment(medication.time, 'HH:mm');
+      const current = moment(currentTime, 'HH:mm');
+      const diffMinutes = Math.abs(current.diff(medTime, 'minutes'));
+
+      // Only send reminder if time matches (within 5 minutes) and not taken today
+      if (diffMinutes <= 5) {
+        // Check if already reminded today
+        const alreadyReminded = await getReminderLog(medication.id, today);
+
+        if (!alreadyReminded) {
+          console.log(`Sending reminder for ${medication.name} at ${medication.time}`);
+
+          // Send reminder to all active patients
+          const message = `تذكير: حان موعد تناول دواء ${medication.name}`;
+
+          for (const patient of activePatients) {
+            const success = await sendTelegramMessage(
+              patient.telegramId,
+              message,
+              createMedicationKeyboard(medication.id)
+            );
+
+            if (success) {
+              console.log(`Reminder sent to ${patient.name}`);
+            } else {
+              console.log(`Failed to send reminder to ${patient.name}`);
+            }
+          }
+
+          // Log the reminder
+          await addReminderLog(medication.id, today);
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error running scheduler:', error);
+  }
+}
+
+// Schedule the scheduler to run every minute
+if (process.env.NODE_ENV !== 'test') {
+  cron.schedule('* * * * *', runScheduler, {
+    timezone: TIMEZONE
+  });
+  console.log('Scheduler started - running every minute');
+}
+
+// ==================== API ROUTES ====================
+
+// Test route
+app.get('/api/test-firebase', async (req, res) => {
+  if (!firebaseInitialized) {
+    return res.status(500).json({ error: 'Firebase not initialized' });
+  }
+  try {
+    const testRef = db.ref('test');
+    await testRef.set({ test: 'success', timestamp: new Date().toISOString() });
+    res.json({ success: true, message: 'Firebase connection successful' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 });
 
-// ============ TIME CHECK ROUTE ============
-app.get('/api/time', async (req, res) => {
-  const now = new Date();
-  const cairoTime = new Date(now.toLocaleString('en-US', { timeZone: 'Africa/Cairo' }));
-  
+// Get current time in Cairo
+app.get('/api/time', (req, res) => {
+  const now = moment().tz(TIMEZONE);
   res.json({
-    utc: now.toISOString(),
-    cairo: cairoTime.toISOString(),
-    cairoTime: cairoTime.getHours().toString().padStart(2, '0') + ':' + 
-               cairoTime.getMinutes().toString().padStart(2, '0'),
-    cairoDate: cairoTime.toISOString().split('T')[0],
-    timezone: 'Africa/Cairo'
+    time: now.format('HH:mm:ss'),
+    date: now.format('YYYY-MM-DD'),
+    timezone: TIMEZONE,
+    timestamp: now.toISOString()
   });
 });
 
-// ============ TEST ROUTE ============
-app.get('/api/test-firebase', async (req, res) => {
-  console.log('🔬 Testing Firebase connection...');
-  try {
-    const testData = {
-      timestamp: new Date().toISOString(),
-      status: 'connected',
-      test: 'Hello from Vercel!',
-      environment: process.env.VERCEL_ENV || 'development'
-    };
-    
-    await firebasePut('test_connection', testData);
-    const data = await firebaseGet('test_connection');
-    
-    res.json({
-      success: true,
-      message: '✅ Firebase is connected!',
-      databaseURL: FIREBASE_DATABASE_URL,
-      data: data
-    });
-  } catch (error) {
-    console.error('Firebase test failed:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message,
-      databaseURL: FIREBASE_DATABASE_URL
-    });
-  }
-});
-
-// ============ AUTH ROUTES ============
-app.post('/api/login', async (req, res) => {
+// Login
+app.post('/api/login', (req, res) => {
   const { username, password } = req.body;
-  if (!username || !password) {
-    return res.status(400).json({ error: 'الرجاء إدخال اسم المستخدم وكلمة المرور' });
-  }
 
-  if (username === process.env.ADMIN_USERNAME && password === process.env.ADMIN_PASSWORD) {
+  if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
     const token = jwt.sign(
       { username, role: 'admin' },
-      process.env.JWT_SECRET,
+      JWT_SECRET,
       { expiresIn: '24h' }
     );
-    
-    // Set secure cookie
+
     res.cookie('token', token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 24 * 60 * 60 * 1000,
-      path: '/'
+      maxAge: 24 * 60 * 60 * 1000 // 24 hours
     });
-    
-    // Do NOT return token in body for security
-    return res.json({
-      success: true,
-      message: 'تم تسجيل الدخول بنجاح'
-    });
+
+    res.json({ success: true, message: 'Login successful' });
+  } else {
+    res.status(401).json({ error: 'Invalid username or password' });
   }
-  res.status(401).json({ error: 'اسم المستخدم أو كلمة المرور غير صحيحة' });
 });
 
+// Logout
 app.post('/api/logout', (req, res) => {
-  res.clearCookie('token', {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    path: '/'
-  });
-  res.json({ success: true, message: 'تم تسجيل الخروج' });
+  res.clearCookie('token');
+  res.json({ success: true, message: 'Logged out successfully' });
 });
 
+// Check auth
 app.get('/api/check-auth', (req, res) => {
   const token = req.cookies.token;
-  if (!token) return res.json({ authenticated: false });
+  if (!token) {
+    return res.json({ authenticated: false });
+  }
+
   try {
-    jwt.verify(token, process.env.JWT_SECRET);
+    jwt.verify(token, JWT_SECRET);
     res.json({ authenticated: true });
   } catch (error) {
     res.json({ authenticated: false });
   }
 });
 
-// ============ MEDICATION ROUTES ============
+// Get all medications
 app.get('/api/medications', async (req, res) => {
-  console.log('📊 Fetching medications...');
+  if (!firebaseInitialized) {
+    return res.status(500).json({ error: 'Firebase not initialized' });
+  }
+
   try {
-    const medications = await firebaseGet('medications');
-    const allMeds = Object.entries(medications)
-      .map(([id, med]) => ({ id, ...med, taken: med.taken || false }))
-      .sort((a, b) => {
-        if (a.date !== b.date) return a.date.localeCompare(b.date);
-        return (a.time || '00:00').localeCompare(b.time || '00:00');
-      });
-    console.log(`📊 Found ${allMeds.length} medications`);
-    res.json(allMeds);
+    const medications = await getAllMedications();
+    res.json(medications);
   } catch (error) {
-    console.error('Error fetching medications:', error);
-    res.status(500).json({ error: 'حدث خطأ في جلب الأدوية', details: error.message });
+    res.status(500).json({ error: error.message });
   }
 });
 
+// Filter medications by date
 app.post('/api/medications/filter', async (req, res) => {
-  const { date } = req.body;
-  if (!date) return res.status(400).json({ error: 'الرجاء تحديد التاريخ' });
+  if (!firebaseInitialized) {
+    return res.status(500).json({ error: 'Firebase not initialized' });
+  }
 
   try {
-    console.log(`🔍 Filtering medications for date: ${date}`);
-    const medications = await firebaseGet('medications');
-    const today = new Date().toISOString().split('T')[0];
-    
-    // Reset taken status for medications on this date
-    for (const [id, med] of Object.entries(medications)) {
-      const medDate = med.date || med.createdAt?.split('T')[0];
-      if (medDate === date && med.taken === true) {
-        await firebasePut(`medications/${id}`, { ...med, taken: false });
-      }
-    }
-    
-    const updatedMedications = await firebaseGet('medications');
-    const filteredMeds = Object.entries(updatedMedications)
-      .filter(([id, med]) => {
-        const medDate = med.date || med.createdAt?.split('T')[0];
-        return medDate === date;
-      })
-      .map(([id, med]) => ({ id, ...med, taken: med.taken || false }));
-    
-    // Send daily summary if filtering for today
-    if (date === today) {
-      const patients = await firebaseGet('patients');
-      for (const [id, patient] of Object.entries(patients)) {
-        if (patient.chatId) {
-          try {
-            await sendDailySummary(patient.chatId, date);
-          } catch (err) {
-            console.error(`Failed to send summary to ${patient.name}:`, err);
-          }
-        }
-      }
-    }
-    
-    res.json(filteredMeds);
+    const { date } = req.body;
+    const medications = await getAllMedications();
+
+    // For now, return all medications with filter info
+    // In a real implementation, you might filter by date
+    const filtered = medications.map(med => ({
+      ...med,
+      filtered: true,
+      filterDate: date || 'all'
+    }));
+
+    res.json(filtered);
   } catch (error) {
-    console.error('Error filtering medications:', error);
-    res.status(500).json({ error: 'حدث خطأ في تصفية الأدوية', details: error.message });
+    res.status(500).json({ error: error.message });
   }
 });
 
+// Add medication
 app.post('/api/medications', authenticateToken, async (req, res) => {
-  const { name, dosage, time, date, notes } = req.body;
-  if (!name || !dosage || !time || !date) {
-    return res.status(400).json({ error: 'الرجاء ملء جميع الحقول المطلوبة' });
+  if (!firebaseInitialized) {
+    return res.status(500).json({ error: 'Firebase not initialized' });
   }
 
   try {
-    console.log(`➕ Adding medication: ${name}`);
+    const { name, time } = req.body;
+
+    if (!name || !time) {
+      return res.status(400).json({ error: 'Name and time are required' });
+    }
+
+    const medsRef = db.ref('medications');
     const newMed = {
       name,
-      dosage,
       time,
-      date,
-      notes: notes || '',
-      active: true,
+      timezone: TIMEZONE,
       taken: false,
+      lastTaken: null,
+      id: `med_${Date.now()}`,
       createdAt: new Date().toISOString()
     };
 
-    const result = await firebasePost('medications', newMed);
+    const ref = await medsRef.push(newMed);
+    const medication = { ...newMed, key: ref.key };
 
-    console.log(`✅ Medication added: ${result.name}`);
-    res.status(201).json({
-      success: true,
-      id: result.name,
-      medication: { id: result.name, ...newMed },
-      message: 'تم إضافة الدواء بنجاح'
-    });
+    res.status(201).json(medication);
   } catch (error) {
-    console.error('Error adding medication:', error);
-    res.status(500).json({ error: 'حدث خطأ في إضافة الدواء', details: error.message });
+    res.status(500).json({ error: error.message });
   }
 });
 
+// Mark medication as taken
 app.put('/api/medications/:id/take', authenticateToken, async (req, res) => {
-  const { id } = req.params;
-  const { patientName } = req.body;
+  if (!firebaseInitialized) {
+    return res.status(500).json({ error: 'Firebase not initialized' });
+  }
 
   try {
-    console.log(`✅ Marking medication as taken: ${id}`);
-    const medication = await firebaseGet(`medications/${id}`);
+    const { id } = req.params;
+    const medication = await getMedicationById(id);
+
     if (!medication) {
-      return res.status(404).json({ error: 'الدواء غير موجود' });
+      return res.status(404).json({ error: 'Medication not found' });
     }
 
-    if (medication.taken) {
-      return res.status(400).json({ error: 'تم تناول هذا الدواء بالفعل' });
-    }
-
-    await firebasePut(`medications/${id}`, {
-      ...medication,
+    const medRef = db.ref(`medications/${medication.key}`);
+    await medRef.update({
       taken: true,
-      takenAt: new Date().toISOString()
+      lastTaken: new Date().toISOString()
     });
 
-    await notifyMedicationTaken({ id, ...medication });
+    // Send notification to all patients
+    const patients = await getAllPatients();
+    const activePatients = patients.filter(p => p.telegramId && p.isActive !== false);
 
-    console.log(`✅ Medication marked as taken: ${id}`);
-    res.json({
-      success: true,
-      message: 'تم تسجيل تناول الدواء وإرسال الإشعار'
-    });
+    if (activePatients.length > 0) {
+      const message = `تم تناول دواء ${medication.name} الساعة ${moment().tz(TIMEZONE).format('HH:mm')}`;
+      for (const patient of activePatients) {
+        await sendTelegramMessage(patient.telegramId, message);
+      }
+    }
+
+    res.json({ success: true, message: 'Medication marked as taken' });
   } catch (error) {
-    console.error('Error marking medication as taken:', error);
-    res.status(500).json({
-      error: 'حدث خطأ في تحديث حالة الدواء',
-      details: error.message
-    });
+    res.status(500).json({ error: error.message });
   }
 });
 
+// Delete medication
 app.delete('/api/medications/:id', authenticateToken, async (req, res) => {
-  const { id } = req.params;
+  if (!firebaseInitialized) {
+    return res.status(500).json({ error: 'Firebase not initialized' });
+  }
+
   try {
-    console.log(`🗑️ Deleting medication: ${id}`);
-    await firebaseDelete(`medications/${id}`);
-    console.log(`🗑️ Medication deleted: ${id}`);
-    res.json({ success: true, message: 'تم حذف الدواء بنجاح' });
+    const { id } = req.params;
+    const medication = await getMedicationById(id);
+
+    if (!medication) {
+      return res.status(404).json({ error: 'Medication not found' });
+    }
+
+    const medRef = db.ref(`medications/${medication.key}`);
+    await medRef.remove();
+
+    res.json({ success: true, message: 'Medication deleted' });
   } catch (error) {
-    console.error('Error deleting medication:', error);
-    res.status(500).json({
-      error: 'حدث خطأ في حذف الدواء',
-      details: error.message
-    });
+    res.status(500).json({ error: error.message });
   }
 });
 
-// ============ PATIENT ROUTES ============
+// Get all patients
 app.get('/api/patients', authenticateToken, async (req, res) => {
+  if (!firebaseInitialized) {
+    return res.status(500).json({ error: 'Firebase not initialized' });
+  }
+
   try {
-    console.log('👥 Fetching patients...');
-    const patients = await firebaseGet('patients');
-    const allPatients = Object.entries(patients).map(([id, patient]) => ({ id, ...patient }));
-    console.log(`👥 Found ${allPatients.length} patients`);
-    res.json(allPatients);
+    const patients = await getAllPatients();
+    res.json(patients);
   } catch (error) {
-    console.error('Error fetching patients:', error);
-    res.status(500).json({
-      error: 'حدث خطأ في جلب المرضى',
-      details: error.message
-    });
+    res.status(500).json({ error: error.message });
   }
 });
 
+// Add patient
 app.post('/api/patients', authenticateToken, async (req, res) => {
-  const { name, chatId, notes } = req.body;
-  if (!name || !chatId) {
-    return res.status(400).json({ error: 'الرجاء إدخال الاسم و Chat ID' });
+  if (!firebaseInitialized) {
+    return res.status(500).json({ error: 'Firebase not initialized' });
   }
 
   try {
-    console.log(`👤 Adding patient: ${name} (${chatId})`);
+    const { name, telegramId } = req.body;
+
+    if (!name) {
+      return res.status(400).json({ error: 'Name is required' });
+    }
+
+    const patientsRef = db.ref('patients');
     const newPatient = {
       name,
-      chatId,
-      notes: notes || '',
+      telegramId: telegramId || null,
+      isActive: true,
+      id: `patient_${Date.now()}`,
       createdAt: new Date().toISOString()
     };
-    const result = await firebasePost('patients', newPatient);
 
-    await sendWelcomeMessage(chatId, name);
+    const ref = await patientsRef.push(newPatient);
+    const patient = { ...newPatient, key: ref.key };
 
-    console.log(`✅ Patient added: ${result.name}`);
-    res.status(201).json({
-      success: true,
-      id: result.name,
-      patient: { id: result.name, ...newPatient },
-      message: 'تم إضافة المريض وإرسال رسالة الترحيب'
-    });
+    res.status(201).json(patient);
   } catch (error) {
-    console.error('Error adding patient:', error);
-    res.status(500).json({
-      error: 'حدث خطأ في إضافة المريض',
-      details: error.message
-    });
+    res.status(500).json({ error: error.message });
   }
 });
 
+// Delete patient
 app.delete('/api/patients/:id', authenticateToken, async (req, res) => {
-  const { id } = req.params;
+  if (!firebaseInitialized) {
+    return res.status(500).json({ error: 'Firebase not initialized' });
+  }
+
   try {
-    console.log(`🗑️ Deleting patient: ${id}`);
-    await firebaseDelete(`patients/${id}`);
-    console.log(`🗑️ Patient deleted: ${id}`);
-    res.json({ success: true, message: 'تم حذف المريض بنجاح' });
+    const { id } = req.params;
+    const patient = await getPatientById(id);
+
+    if (!patient) {
+      return res.status(404).json({ error: 'Patient not found' });
+    }
+
+    const patientRef = db.ref(`patients/${patient.key}`);
+    await patientRef.remove();
+
+    res.json({ success: true, message: 'Patient deleted' });
   } catch (error) {
-    console.error('Error deleting patient:', error);
-    res.status(500).json({
-      error: 'حدث خطأ في حذف المريض',
-      details: error.message
-    });
+    res.status(500).json({ error: error.message });
   }
 });
 
-// ============ TELEGRAM ROUTES ============
+// Test Telegram
 app.post('/api/telegram/test', authenticateToken, async (req, res) => {
-  const { chatId } = req.body;
-  if (!chatId) return res.status(400).json({ error: 'الرجاء إدخال Chat ID' });
-
   try {
-    console.log(`📱 Testing Telegram: ${chatId}`);
-    await sendTestMessage(chatId);
-    res.json({ success: true, message: 'تم إرسال رسالة الاختبار بنجاح' });
+    const { telegramId } = req.body;
+
+    if (!telegramId) {
+      return res.status(400).json({ error: 'Telegram ID is required' });
+    }
+
+    const success = await sendTelegramMessage(
+      telegramId,
+      'هذا رسالة اختبارية من نظام تذكير الأدوية'
+    );
+
+    if (success) {
+      res.json({ success: true, message: 'Test message sent successfully' });
+    } else {
+      res.status(500).json({ error: 'Failed to send test message' });
+    }
   } catch (error) {
-    console.error('Telegram test error:', error);
-    res.status(500).json({
-      error: 'فشل إرسال رسالة الاختبار',
-      details: error.message
-    });
+    res.status(500).json({ error: error.message });
   }
 });
 
+// Set webhook
 app.post('/api/telegram/set-webhook', authenticateToken, async (req, res) => {
   try {
-    const { url } = req.body;
-    if (!url) return res.status(400).json({ error: 'الرجاء إدخال URL' });
+    const { webhookUrl } = req.body;
 
-    console.log(`🔗 Setting webhook: ${url}`);
-    const response = await telegramAxios.post(`${TELEGRAM_API}/setWebhook`, { url });
-    res.json({
-      success: true,
-      message: 'تم تعيين Webhook بنجاح',
-      data: response.data
+    if (!webhookUrl) {
+      return res.status(400).json({ error: 'Webhook URL is required' });
+    }
+
+    if (!TELEGRAM_BOT_TOKEN) {
+      return res.status(500).json({ error: 'TELEGRAM_BOT_TOKEN not configured' });
+    }
+
+    const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setWebhook`;
+    const response = await axios.post(url, {
+      url: webhookUrl
     });
+
+    if (response.data.ok) {
+      res.json({ success: true, message: 'Webhook set successfully', data: response.data });
+    } else {
+      res.status(500).json({ error: 'Failed to set webhook', data: response.data });
+    }
   } catch (error) {
-    console.error('Set webhook error:', error);
-    res.status(500).json({
-      error: 'فشل في تعيين Webhook',
-      details: error.message
-    });
+    res.status(500).json({ error: error.response?.data?.description || error.message });
   }
 });
 
+// Get webhook info
 app.get('/api/telegram/webhook-info', authenticateToken, async (req, res) => {
   try {
-    console.log('📊 Getting webhook info...');
-    const response = await telegramAxios.get(`${TELEGRAM_API}/getWebhookInfo`);
-    res.json(response.data);
+    if (!TELEGRAM_BOT_TOKEN) {
+      return res.status(500).json({ error: 'TELEGRAM_BOT_TOKEN not configured' });
+    }
+
+    const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getWebhookInfo`;
+    const response = await axios.get(url);
+
+    if (response.data.ok) {
+      res.json(response.data.result);
+    } else {
+      res.status(500).json({ error: 'Failed to get webhook info', data: response.data });
+    }
   } catch (error) {
-    console.error('Get webhook error:', error);
-    res.status(500).json({
-      error: 'فشل في جلب معلومات Webhook',
-      details: error.message
-    });
+    res.status(500).json({ error: error.message });
   }
 });
 
-// ============ TELEGRAM WEBHOOK ============
-app.post('/api/webhook/telegram', express.json(), async (req, res) => {
+// Telegram webhook endpoint
+app.post('/api/webhook/telegram', async (req, res) => {
   try {
-    const { callback_query, message } = req.body;
-    
+    const { message, callback_query } = req.body;
+
+    // Handle callback queries (button clicks)
     if (callback_query) {
-      const { data, from, id: callbackId } = callback_query;
-      const chatId = from.id;
+      const { data, from, message: msg } = callback_query;
 
-      // Answer callback query immediately to prevent timeout
-      try {
-        await telegramAxios.post(`${TELEGRAM_API}/answerCallbackQuery`, {
-          callback_query_id: callbackId
-        });
-      } catch (error) {
-        console.error('Failed to answer callback query:', error.message);
-      }
-
-      if (data && data.startsWith('taken_')) {
-        const medicationId = data.replace('taken_', '');
-        const medication = await firebaseGet(`medications/${medicationId}`);
+      if (data.startsWith('take_')) {
+        const medicationId = data.replace('take_', '');
+        const medication = await getMedicationById(medicationId);
 
         if (medication) {
-          if (!medication.taken) {
-            // Use a lock to prevent double processing
-            const lockKey = `take_lock_${medicationId}_${Date.now()}`;
-            await firebasePut(`system_locks/${lockKey}`, {
-              locked: true,
-              timestamp: Date.now(),
-              chatId: chatId
-            });
+          const medRef = db.ref(`medications/${medication.key}`);
+          await medRef.update({
+            taken: true,
+            lastTaken: new Date().toISOString()
+          });
 
-            await firebasePut(`medications/${medicationId}`, {
-              ...medication,
-              taken: true,
-              takenAt: new Date().toISOString(),
-              takenBy: chatId
-            });
+          await sendTelegramMessage(
+            from.id,
+            `تم تسجيل تناول دواء ${medication.name} بنجاح`
+          );
 
-            // Send confirmation to the user who took it
-            await sendTelegramMessage(chatId, `✅ تم تسجيل تناول ${medication.name}`);
-
-            // Notify all patients
-            await notifyMedicationTaken({ id: medicationId, ...medication });
-          } else {
-            await sendTelegramMessage(chatId, `ℹ️ ${medication.name} تم تناوله بالفعل`);
+          // Notify all patients
+          const patients = await getAllPatients();
+          const activePatients = patients.filter(p => p.telegramId && p.isActive !== false);
+          const message = `تم تناول دواء ${medication.name} الساعة ${moment().tz(TIMEZONE).format('HH:mm')}`;
+          for (const patient of activePatients) {
+            await sendTelegramMessage(patient.telegramId, message);
           }
-        } else {
-          await sendTelegramMessage(chatId, '❌ الدواء غير موجود');
-        }
-      } else if (data && data.startsWith('remind_later_')) {
-        const medicationId = data.replace('remind_later_', '');
-        
-        // Store delayed reminder in Firebase
-        const cairoTime = new Date(new Date().toLocaleString('en-US', { timeZone: 'Africa/Cairo' }));
-        const currentDate = cairoTime.toISOString().split('T')[0];
-        const remindAt = Date.now() + 10 * 60 * 1000; // 10 minutes from now
-        const delayedKey = `delayed_${medicationId}_${currentDate}`;
-        
-        await firebasePost(`reminders/delayed/${delayedKey}`, {
-          medicationId: medicationId,
-          chatId: chatId,
-          remindAt: remindAt,
-          sent: false,
-          createdAt: new Date().toISOString()
-        });
 
-        await sendTelegramMessage(chatId, `⏰ سيتم التذكير بعد 10 دقائق`);
+          // Answer callback query
+          await axios.post(
+            `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/answerCallbackQuery`,
+            {
+              callback_query_id: callback_query.id,
+              text: 'تم تسجيل التناول بنجاح'
+            }
+          );
+        }
+      } else if (data.startsWith('remind_')) {
+        const medicationId = data.replace('remind_', '');
+        const medication = await getMedicationById(medicationId);
+
+        if (medication) {
+          // Send reminder after 10 minutes
+          setTimeout(async () => {
+            const message = `تذكير: حان موعد تناول دواء ${medication.name}`;
+            await sendTelegramMessage(
+              from.id,
+              message,
+              createMedicationKeyboard(medicationId)
+            );
+          }, 10 * 60 * 1000);
+
+          await sendTelegramMessage(
+            from.id,
+            `تم تأجيل تذكير دواء ${medication.name} لمدة 10 دقائق`
+          );
+
+          // Answer callback query
+          await axios.post(
+            `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/answerCallbackQuery`,
+            {
+              callback_query_id: callback_query.id,
+              text: 'تم تأجيل التذكير 10 دقائق'
+            }
+          );
+        }
+      }
+
+      res.sendStatus(200);
+      return;
+    }
+
+    // Handle regular messages
+    if (message && message.text) {
+      console.log(`Received message from ${message.from.id}: ${message.text}`);
+
+      // Store Telegram ID if patient exists
+      const patients = await getAllPatients();
+      const patient = patients.find(p => p.name === 'لطيف');
+
+      if (patient && !patient.telegramId) {
+        const patientRef = db.ref(`patients/${patient.key}`);
+        await patientRef.update({
+          telegramId: message.from.id
+        });
+        await sendTelegramMessage(
+          message.from.id,
+          'تم تسجيل حسابك بنجاح في نظام تذكير الأدوية'
+        );
       }
     }
-    res.status(200).send('OK');
+
+    res.sendStatus(200);
   } catch (error) {
-    console.error('❌ Webhook error:', error);
-    res.status(500).send('Error');
+    console.error('Webhook error:', error);
+    res.sendStatus(500);
   }
 });
 
-// ============ SERVE HTML ============
-app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
-app.get('/login', (req, res) => res.sendFile(path.join(__dirname, 'public', 'login.html')));
-app.get('/dashboard', (req, res) => res.sendFile(path.join(__dirname, 'public', 'dashboard.html')));
-
-// ============ ERROR HANDLING ============
-app.use((err, req, res, next) => {
-  console.error('❌ Unhandled error:', err.stack);
-  res.status(500).json({
-    error: 'حدث خطأ في الخادم',
-    details: err.message
-  });
+// Run scheduler manually
+app.get('/api/scheduler', async (req, res) => {
+  try {
+    await runScheduler();
+    res.json({ success: true, message: 'Scheduler executed' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
-// ============ EXPORT FOR VERCEL ============
-// Vercel expects module.exports = app
-module.exports = app;
+// Initialize default data
+initializeDefaultData();
 
-// For local development only
-if (process.env.NODE_ENV !== 'production') {
-  const PORT = process.env.PORT || 3000;
-  app.listen(PORT, () => {
-    console.log('='.repeat(50));
-    console.log(`🚀 Server running on http://localhost:${PORT}`);
-    console.log(`📁 Firebase URL: ${FIREBASE_DATABASE_URL}`);
-    console.log(`👤 Admin: ${process.env.ADMIN_USERNAME}`);
-    console.log(`🤖 Telegram: ${TELEGRAM_BOT_TOKEN ? '✅ Configured' : '❌ Missing'}`);
-    console.log(`🌐 App URL: ${APP_URL}`);
-    console.log('='.repeat(50));
-  });
-}
+// Start server
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
+  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`Timezone: ${TIMEZONE}`);
+});
+
+module.exports = app;
