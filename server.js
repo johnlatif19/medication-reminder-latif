@@ -368,9 +368,8 @@ async function runScheduler() {
     console.log(`Current time (${TIMEZONE}): ${currentTime}`);
 
     const medications = await getAllMedications();
-    const chatIds = await getAllChatIds(); // استخدام دالة جلب Chat IDs
+    const chatIds = await getAllChatIds();
     
-    // استخدام Chat IDs بدلاً من المرضى
     if (chatIds.length === 0) {
       console.log('No chat IDs found');
       return;
@@ -395,7 +394,6 @@ async function runScheduler() {
 
           const message = `تذكير: حان موعد تناول دواء ${medication.name} الساعة ${medication.time}`;
 
-          // إرسال لجميع Chat IDs المحفوظة
           for (const chat of chatIds) {
             const success = await sendTelegramMessage(
               chat.chatId,
@@ -499,6 +497,8 @@ app.get('/api/check-auth', (req, res) => {
   }
 });
 
+// ==================== MEDICATIONS ROUTES ====================
+
 // Get all medications
 app.get('/api/medications', async (req, res) => {
   if (!firebaseInitialized) {
@@ -568,20 +568,45 @@ app.post('/api/medications', authenticateToken, async (req, res) => {
   }
 });
 
-// Update medication
-app.put('/api/medications/:id', authenticateToken, async (req, res) => {
+// RESET ALL - يجب أن يكون قبل Routes اللي فيها :id
+app.put('/api/medications/reset-all', authenticateToken, async (req, res) => {
+  if (!firebaseInitialized) {
+    return res.status(500).json({ error: 'Firebase not initialized' });
+  }
+
+  try {
+    const medications = await getAllMedications();
+    
+    if (medications.length === 0) {
+      return res.json({ success: true, message: 'No medications to reset' });
+    }
+
+    for (const med of medications) {
+      if (med.key) {
+        const medRef = db.ref(`medications/${med.key}`);
+        await medRef.update({
+          taken: false,
+          lastTaken: null,
+          resetAt: new Date().toISOString()
+        });
+      }
+    }
+
+    res.json({ success: true, message: 'All medications reset successfully' });
+  } catch (error) {
+    console.error('Error resetting all medications:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Reset individual medication taken status
+app.put('/api/medications/:id/reset', authenticateToken, async (req, res) => {
   if (!firebaseInitialized) {
     return res.status(500).json({ error: 'Firebase not initialized' });
   }
 
   try {
     const { id } = req.params;
-    const { name, time } = req.body;
-
-    if (!name || !time) {
-      return res.status(400).json({ error: 'Name and time are required' });
-    }
-
     const medication = await getMedicationById(id);
 
     if (!medication) {
@@ -590,13 +615,12 @@ app.put('/api/medications/:id', authenticateToken, async (req, res) => {
 
     const medRef = db.ref(`medications/${medication.key}`);
     await medRef.update({
-      name,
-      time,
-      updatedAt: new Date().toISOString()
+      taken: false,
+      lastTaken: null,
+      resetAt: new Date().toISOString()
     });
 
-    const updatedMedication = await getMedicationById(id);
-    res.json(updatedMedication);
+    res.json({ success: true, message: 'Medication status reset successfully' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -638,14 +662,20 @@ app.put('/api/medications/:id/take', authenticateToken, async (req, res) => {
   }
 });
 
-// Reset medication taken status
-app.put('/api/medications/:id/reset', authenticateToken, async (req, res) => {
+// Update medication
+app.put('/api/medications/:id', authenticateToken, async (req, res) => {
   if (!firebaseInitialized) {
     return res.status(500).json({ error: 'Firebase not initialized' });
   }
 
   try {
     const { id } = req.params;
+    const { name, time } = req.body;
+
+    if (!name || !time) {
+      return res.status(400).json({ error: 'Name and time are required' });
+    }
+
     const medication = await getMedicationById(id);
 
     if (!medication) {
@@ -654,44 +684,14 @@ app.put('/api/medications/:id/reset', authenticateToken, async (req, res) => {
 
     const medRef = db.ref(`medications/${medication.key}`);
     await medRef.update({
-      taken: false,
-      lastTaken: null,
-      resetAt: new Date().toISOString()
+      name,
+      time,
+      updatedAt: new Date().toISOString()
     });
 
-    res.json({ success: true, message: 'Medication status reset successfully' });
+    const updatedMedication = await getMedicationById(id);
+    res.json(updatedMedication);
   } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Reset all medications taken status
-app.put('/api/medications/reset-all', authenticateToken, async (req, res) => {
-  if (!firebaseInitialized) {
-    return res.status(500).json({ error: 'Firebase not initialized' });
-  }
-
-  try {
-    const medications = await getAllMedications();
-    
-    if (medications.length === 0) {
-      return res.json({ success: true, message: 'No medications to reset' });
-    }
-
-    for (const med of medications) {
-      if (med.key) {
-        const medRef = db.ref(`medications/${med.key}`);
-        await medRef.update({
-          taken: false,
-          lastTaken: null,
-          resetAt: new Date().toISOString()
-        });
-      }
-    }
-
-    res.json({ success: true, message: 'All medications reset successfully' });
-  } catch (error) {
-    console.error('Error resetting all medications:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -718,6 +718,10 @@ app.delete('/api/medications/:id', authenticateToken, async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+// ==================== END MEDICATIONS ROUTES ====================
+
+// ==================== PATIENTS ROUTES ====================
 
 // Get all patients
 app.get('/api/patients', authenticateToken, async (req, res) => {
@@ -822,6 +826,8 @@ app.delete('/api/patients/:id', authenticateToken, async (req, res) => {
   }
 });
 
+// ==================== END PATIENTS ROUTES ====================
+
 // ==================== CHAT IDs ROUTES ====================
 
 // Get all chat IDs
@@ -896,6 +902,8 @@ app.delete('/api/chat-ids/:id', authenticateToken, async (req, res) => {
 });
 
 // ==================== END CHAT IDs ROUTES ====================
+
+// ==================== TELEGRAM ROUTES ====================
 
 // Test Telegram
 app.post('/api/telegram/test', authenticateToken, async (req, res) => {
@@ -1089,6 +1097,8 @@ app.post('/api/webhook/telegram', async (req, res) => {
     res.sendStatus(500);
   }
 });
+
+// ==================== END TELEGRAM ROUTES ====================
 
 // Run scheduler manually
 app.get('/api/scheduler', async (req, res) => {
