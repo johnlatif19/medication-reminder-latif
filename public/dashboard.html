@@ -151,6 +151,17 @@
             box-shadow: 0 5px 15px rgba(237, 100, 166, 0.4);
         }
 
+        .btn-save {
+            background: #38a169;
+            color: white;
+        }
+
+        .btn-save:hover {
+            background: #2f855a;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(56, 161, 105, 0.4);
+        }
+
         .tabs {
             display: flex;
             gap: 10px;
@@ -416,6 +427,64 @@
             color: #742a2a;
         }
 
+        .chat-input-group {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-bottom: 15px;
+        }
+
+        .chat-input-group input {
+            flex: 1;
+            min-width: 200px;
+            padding: 10px 15px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 14px;
+            font-family: inherit;
+        }
+
+        .chat-input-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .chat-list {
+            margin-top: 15px;
+        }
+
+        .chat-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 15px;
+            background: #f7fafc;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            border: 1px solid #e2e8f0;
+        }
+
+        .chat-item .chat-id {
+            font-weight: 600;
+            color: #2d3748;
+        }
+
+        .chat-item .chat-name {
+            color: #718096;
+            font-size: 14px;
+        }
+
+        .chat-item .actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .chat-item .actions .btn {
+            padding: 4px 12px;
+            font-size: 11px;
+        }
+
         @media (max-width: 768px) {
             .header {
                 flex-direction: column;
@@ -438,6 +507,14 @@
             .modal-content {
                 padding: 20px;
             }
+
+            .chat-input-group {
+                flex-direction: column;
+            }
+
+            .chat-input-group input {
+                width: 100%;
+            }
         }
     </style>
 </head>
@@ -457,6 +534,7 @@
             <button class="tab active" data-tab="medications">الأدوية</button>
             <button class="tab" data-tab="patients">المرضى</button>
             <button class="tab" data-tab="settings">الإعدادات</button>
+            <button class="tab" data-tab="chatids">Chat IDs</button>
         </div>
 
         <!-- Tab: Medications -->
@@ -521,13 +599,32 @@
                     <h3>إعدادات Webhook</h3>
                     <div class="form-group" style="margin-bottom: 15px;">
                         <label for="webhookUrl">Webhook URL</label>
-                        <input type="url" id="webhookUrl" placeholder="https://medication-reminder-latif.vercel.app/api/webhook/telegram" style="width: 100%; padding: 10px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; font-family: inherit;">
+                        <input type="url" id="webhookUrl" placeholder="https://your-app.vercel.app/api/webhook/telegram" style="width: 100%; padding: 10px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; font-family: inherit;">
                     </div>
                     <div style="display: flex; gap: 10px; flex-wrap: wrap;">
                         <button class="btn btn-primary btn-sm" onclick="setWebhook()">تعيين Webhook</button>
                         <button class="btn btn-warning btn-sm" onclick="getWebhookInfo()">عرض حالة Webhook</button>
                     </div>
                     <div id="webhookInfo" style="margin-top: 15px;"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab: Chat IDs -->
+        <div class="tab-content" id="tab-chatids">
+            <div class="card">
+                <div class="card-header">
+                    <h2>إدارة Chat IDs</h2>
+                </div>
+
+                <div class="chat-input-group">
+                    <input type="text" id="newChatId" placeholder="أدخل Chat ID الجديد">
+                    <input type="text" id="newChatName" placeholder="اسم المستخدم (اختياري)">
+                    <button class="btn btn-save" onclick="saveChatId()">حفظ Chat ID</button>
+                </div>
+
+                <div id="chatIdsList" class="chat-list">
+                    <!-- Chat IDs will be loaded here -->
                 </div>
             </div>
         </div>
@@ -553,6 +650,7 @@
         // Global state
         let allMedications = [];
         let allPatients = [];
+        let allChatIds = [];
         let currentFilter = null;
         let modalMode = 'add';
         let editId = null;
@@ -921,7 +1019,7 @@
                     <input type="text" id="patientName" placeholder="أدخل اسم المريض" required>
                 </div>
                 <div class="form-group">
-                    <label for="patientTelegramId">معرف Telegram (Chat ID)</label>
+                    <label for="patientTelegramId">معرف Telegram</label>
                     <input type="text" id="patientTelegramId" placeholder="أدخل معرف Telegram">
                     <div style="font-size: 12px; color: #888; margin-top: 5px;">اترك فارغاً لإضافة المريض بدون Telegram</div>
                 </div>
@@ -986,7 +1084,7 @@
                     <input type="text" id="patientName" value="${patient.name}" required>
                 </div>
                 <div class="form-group">
-                    <label for="patientTelegramId">معرف Telegram (Chat ID)</label>
+                    <label for="patientTelegramId">معرف Telegram</label>
                     <input type="text" id="patientTelegramId" value="${patient.telegramId || ''}" placeholder="أدخل معرف Telegram">
                 </div>
                 <div class="form-group">
@@ -1082,6 +1180,110 @@
             } catch (error) {
                 console.error('Error testing Telegram:', error);
                 alert('حدث خطأ في إرسال رسالة الاختبار');
+            }
+        }
+
+        // ==================== CHAT IDs ====================
+
+        // Load Chat IDs
+        async function loadChatIds() {
+            try {
+                const response = await fetch('/api/chat-ids', {
+                    credentials: 'include'
+                });
+                const chatIds = await response.json();
+                allChatIds = chatIds;
+                renderChatIds(chatIds);
+            } catch (error) {
+                console.error('Error loading chat IDs:', error);
+            }
+        }
+
+        // Render Chat IDs
+        function renderChatIds(chatIds) {
+            const container = document.getElementById('chatIdsList');
+
+            if (!chatIds || chatIds.length === 0) {
+                container.innerHTML = `
+                    <div class="no-data">
+                        <p>لا توجد Chat IDs محفوظة</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = chatIds.map(chat => `
+                <div class="chat-item">
+                    <div>
+                        <div class="chat-id">${chat.chatId}</div>
+                        ${chat.name ? `<div class="chat-name">${chat.name}</div>` : ''}
+                    </div>
+                    <div class="actions">
+                        <button class="btn btn-danger btn-sm" onclick="deleteChatId('${chat.id}')">حذف</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Save Chat ID
+        async function saveChatId() {
+            const chatId = document.getElementById('newChatId').value.trim();
+            const name = document.getElementById('newChatName').value.trim();
+
+            if (!chatId) {
+                alert('الرجاء إدخال Chat ID');
+                return;
+            }
+
+            // Check if chat ID already exists
+            if (allChatIds.some(c => c.chatId === chatId)) {
+                alert('هذا Chat ID موجود بالفعل');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/chat-ids', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ chatId, name: name || null }),
+                    credentials: 'include'
+                });
+
+                if (response.ok) {
+                    alert('تم حفظ Chat ID بنجاح');
+                    document.getElementById('newChatId').value = '';
+                    document.getElementById('newChatName').value = '';
+                    loadChatIds();
+                } else {
+                    const error = await response.json();
+                    alert(`خطأ: ${error.error || 'حدث خطأ'}`);
+                }
+            } catch (error) {
+                console.error('Error saving chat ID:', error);
+                alert('حدث خطأ في حفظ Chat ID');
+            }
+        }
+
+        // Delete Chat ID
+        async function deleteChatId(id) {
+            if (!confirm('هل أنت متأكد من حذف هذا Chat ID؟')) return;
+
+            try {
+                const response = await fetch(`/api/chat-ids/${id}`, {
+                    method: 'DELETE',
+                    credentials: 'include'
+                });
+
+                if (response.ok) {
+                    alert('تم حذف Chat ID بنجاح');
+                    loadChatIds();
+                } else {
+                    const error = await response.json();
+                    alert(`خطأ: ${error.error || 'حدث خطأ'}`);
+                }
+            } catch (error) {
+                console.error('Error deleting chat ID:', error);
+                alert('حدث خطأ في حذف Chat ID');
             }
         }
 
@@ -1209,6 +1411,7 @@
         function loadAllData() {
             loadMedications();
             loadPatients();
+            loadChatIds();
         }
 
         document.addEventListener('DOMContentLoaded', () => {
@@ -1227,6 +1430,18 @@
         document.getElementById('modal').addEventListener('click', (e) => {
             if (e.target === document.getElementById('modal')) {
                 closeModal();
+            }
+        });
+
+        // Allow Enter key to save chat ID
+        document.getElementById('newChatId').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                saveChatId();
+            }
+        });
+        document.getElementById('newChatName').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                saveChatId();
             }
         });
     </script>
