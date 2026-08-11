@@ -83,6 +83,13 @@
             box-shadow: 0 5px 15px rgba(72, 187, 120, 0.4);
         }
 
+        .btn-success:disabled {
+            background: #a0aec0;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
         .btn-danger {
             background: #fc8181;
             color: white;
@@ -176,7 +183,7 @@
 
         .medications-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
             gap: 20px;
         }
 
@@ -226,6 +233,22 @@
             color: #744210;
         }
 
+        .medication-card .taken-info {
+            font-size: 12px;
+            color: #4a5568;
+            background: #f7fafc;
+            padding: 8px 12px;
+            border-radius: 8px;
+            margin-top: 8px;
+            margin-bottom: 8px;
+            border-right: 3px solid #48bb78;
+        }
+
+        .medication-card .taken-info .label {
+            font-weight: 600;
+            color: #2d3748;
+        }
+
         .medication-card .actions {
             display: flex;
             gap: 10px;
@@ -254,6 +277,30 @@
             font-size: 18px;
         }
 
+        .refresh-btn {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            font-size: 24px;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .refresh-btn:hover {
+            transform: rotate(90deg);
+            box-shadow: 0 6px 25px rgba(102, 126, 234, 0.6);
+        }
+
         @media (max-width: 768px) {
             .header {
                 flex-direction: column;
@@ -275,6 +322,14 @@
             .medications-grid {
                 grid-template-columns: 1fr;
             }
+
+            .refresh-btn {
+                width: 50px;
+                height: 50px;
+                font-size: 20px;
+                bottom: 15px;
+                right: 15px;
+            }
         }
     </style>
 </head>
@@ -283,6 +338,9 @@
         <!-- Header -->
         <div class="header">
             <h1>نظام تذكير الأدوية</h1>
+            <div class="header-controls">
+                <a href="/dashboard" class="btn btn-dashboard">لوحة التحكم</a>
+            </div>
         </div>
 
         <!-- Stats -->
@@ -314,6 +372,9 @@
             <!-- Medications will be loaded here -->
         </div>
     </div>
+
+    <!-- Refresh Button -->
+    <button class="refresh-btn" onclick="loadMedications()" title="تحديث">🔄</button>
 
     <script>
         // Global state
@@ -351,21 +412,40 @@
                 return;
             }
 
-            grid.innerHTML = medications.map(med => `
-                <div class="medication-card">
-                    <div class="name">${med.name}</div>
-                    <div class="time">⏰ ${med.time}</div>
-                    <div class="status ${med.taken ? 'status-taken' : 'status-pending'}">
-                        ${med.taken ? 'تم التناول' : 'في الانتظار'}
+            grid.innerHTML = medications.map(med => {
+                // Determine if medication was taken today
+                const isTakenToday = med.taken;
+                const takenTime = med.lastTaken ? new Date(med.lastTaken) : null;
+                const expectedTime = med.time;
+                
+                let takenInfo = '';
+                if (isTakenToday && takenTime) {
+                    const timeStr = takenTime.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+                    takenInfo = `
+                        <div class="taken-info">
+                            <span class="label">تم التناول:</span> الساعة ${timeStr}
+                            <br>
+                            <span class="label">الموعد المقرر:</span> الساعة ${expectedTime}
+                        </div>
+                    `;
+                }
+
+                return `
+                    <div class="medication-card">
+                        <div class="name">${med.name}</div>
+                        <div class="time">الموعد المقرر: ${med.time}</div>
+                        <div class="status ${isTakenToday ? 'status-taken' : 'status-pending'}">
+                            ${isTakenToday ? 'تم التناول اليوم' : 'في الانتظار'}
+                        </div>
+                        ${takenInfo}
+                        <div class="actions">
+                            <button class="btn btn-success" onclick="markAsTaken('${med.id}')" ${isTakenToday ? 'disabled' : ''}>
+                                ${isTakenToday ? 'تم التناول' : 'تم التناول'}
+                            </button>
+                        </div>
                     </div>
-                    ${med.lastTaken ? `<div style="font-size: 12px; color: #888; margin-bottom: 10px;">آخر تناول: ${new Date(med.lastTaken).toLocaleString('ar-EG')}</div>` : ''}
-                    <div class="actions">
-                        <button class="btn btn-success" onclick="markAsTaken('${med.id}')" ${med.taken ? 'disabled' : ''}>
-                            تم التناول
-                        </button>
-                    </div>
-                </div>
-            `).join('');
+                `;
+            }).join('');
         }
 
         // Update statistics
@@ -388,7 +468,6 @@
             }
 
             // For now, we just display all medications with filter info
-            // In a real implementation, you would filter based on date
             renderMedications(allMedications);
             currentFilter = date;
         }
@@ -413,7 +492,7 @@
 
                 if (response.ok) {
                     alert('تم تسجيل تناول الدواء بنجاح');
-                    loadMedications();
+                    loadMedications(); // Refresh the page
                 } else {
                     const error = await response.json();
                     alert(`خطأ: ${error.error || 'حدث خطأ'}`);
@@ -423,6 +502,11 @@
                 alert('حدث خطأ في تسجيل التناول');
             }
         }
+
+        // Auto-refresh every 30 seconds
+        setInterval(() => {
+            loadMedications();
+        }, 30000);
 
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
