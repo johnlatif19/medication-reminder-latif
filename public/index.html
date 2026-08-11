@@ -338,9 +338,6 @@
         <!-- Header -->
         <div class="header">
             <h1>نظام تذكير الأدوية</h1>
-            <div class="header-controls">
-                <a href="/dashboard" class="btn btn-dashboard">لوحة التحكم</a>
-            </div>
         </div>
 
         <!-- Stats -->
@@ -440,7 +437,7 @@
                         ${takenInfo}
                         <div class="actions">
                             <button class="btn btn-success" onclick="markAsTaken('${med.id}')" ${isTakenToday ? 'disabled' : ''}>
-                                ${isTakenToday ? 'تم التناول' : 'تم التناول'}
+                                تم التناول
                             </button>
                         </div>
                     </div>
@@ -503,10 +500,10 @@
             }
         }
 
-        // Auto-refresh every 30 seconds
+        // Auto-refresh every 5 seconds
         setInterval(() => {
             loadMedications();
-        }, 30000);
+        }, 5000);
 
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
