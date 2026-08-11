@@ -139,7 +139,7 @@ const authenticateToken = (req, res, next) => {
 };
 
 // Helper function to send Telegram message with website link
-async function sendTelegramMessage(chatId, text, replyMarkup = null) {
+async function sendTelegramMessage(chatId, text) {
   if (!TELEGRAM_BOT_TOKEN) {
     console.error('TELEGRAM_BOT_TOKEN not configured');
     return false;
@@ -157,34 +157,12 @@ async function sendTelegramMessage(chatId, text, replyMarkup = null) {
       parse_mode: 'HTML'
     };
 
-    if (replyMarkup) {
-      payload.reply_markup = replyMarkup;
-    }
-
     const response = await axios.post(url, payload);
     return response.data.ok;
   } catch (error) {
     console.error('Error sending Telegram message:', error.response?.data || error.message);
     return false;
   }
-}
-
-// Helper function to create inline keyboard
-function createMedicationKeyboard(medicationId) {
-  return {
-    inline_keyboard: [
-      [
-        {
-          text: 'تم التناول',
-          callback_data: `take_${medicationId}`
-        },
-        {
-          text: 'تذكير بعد 10 دقائق',
-          callback_data: `remind_${medicationId}`
-        }
-      ]
-    ]
-  };
 }
 
 // Helper function to get medication by ID
@@ -282,6 +260,23 @@ async function getAllChatIds() {
   } catch (error) {
     console.error('Error getting chat IDs:', error);
     return [];
+  }
+}
+
+// Helper function to get chat ID by ID
+async function getChatIdById(id) {
+  if (!firebaseInitialized) return null;
+
+  try {
+    const chatIdsRef = db.ref('chat_ids');
+    const snapshot = await chatIdsRef.child(id).once('value');
+    if (!snapshot.exists()) return null;
+
+    const data = snapshot.val();
+    return { ...data, key: id, id: id };
+  } catch (error) {
+    console.error('Error getting chat ID:', error);
+    return null;
   }
 }
 // ==================== END HELPER FUNCTION ====================
@@ -400,11 +395,7 @@ async function runScheduler() {
           const message = `تذكير: حان موعد تناول دواء ${medication.name} الساعة ${medication.time}`;
 
           for (const chat of chatIds) {
-            const success = await sendTelegramMessage(
-              chat.chatId,
-              message,
-              createMedicationKeyboard(medication.id)
-            );
+            const success = await sendTelegramMessage(chat.chatId, message);
 
             if (success) {
               console.log(`Reminder sent to chat ID: ${chat.chatId}`);
@@ -878,11 +869,45 @@ app.post('/api/chat-ids', authenticateToken, async (req, res) => {
     const ref = await chatIdsRef.push(newChat);
     const chat = { ...newChat, id: ref.key, key: ref.key };
 
-    // Send welcome message when chat ID is added manually
-    const welcomeMessage = `مرحبا\nتم اضافة رقمكم الى موقع "نظام تذكير الأدوية (لطيف)"\nللمتابعة برجاء زيارة الويب:\n${WEBSITE_URL}`;
+    // Send welcome message with name
+    const userName = name || 'عزيزي المستخدم';
+    const welcomeMessage = `مرحبا ${userName}\nتم اضافة رقمكم الى موقع "نظام تذكير الأدوية (لطيف)"\nللمتابعة برجاء زيارة الويب:\n${WEBSITE_URL}`;
     await sendTelegramMessage(chatId, welcomeMessage);
 
     res.status(201).json(chat);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update chat ID (to add/update name)
+app.put('/api/chat-ids/:id', authenticateToken, async (req, res) => {
+  if (!firebaseInitialized) {
+    return res.status(500).json({ error: 'Firebase not initialized' });
+  }
+
+  try {
+    const { id } = req.params;
+    const { name } = req.body;
+
+    if (!name) {
+      return res.status(400).json({ error: 'Name is required' });
+    }
+
+    const chat = await getChatIdById(id);
+
+    if (!chat) {
+      return res.status(404).json({ error: 'Chat ID not found' });
+    }
+
+    const chatRef = db.ref(`chat_ids/${id}`);
+    await chatRef.update({
+      name: name,
+      updatedAt: new Date().toISOString()
+    });
+
+    const updatedChat = await getChatIdById(id);
+    res.json(updatedChat);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -989,73 +1014,16 @@ app.post('/api/webhook/telegram', async (req, res) => {
   try {
     const { message, callback_query } = req.body;
 
-    // Handle callback queries (button clicks)
+    // Handle callback queries (button clicks) - تم إزالة دعم الأزرار
     if (callback_query) {
-      const { data, from, message: msg } = callback_query;
-
-      if (data.startsWith('take_')) {
-        const medicationId = data.replace('take_', '');
-        const medication = await getMedicationById(medicationId);
-
-        if (medication) {
-          const medRef = db.ref(`medications/${medication.key}`);
-          await medRef.update({
-            taken: true,
-            lastTaken: new Date().toISOString()
-          });
-
-          await sendTelegramMessage(
-            from.id,
-            `تم تسجيل تناول دواء ${medication.name} بنجاح`
-          );
-
-          // Notify all chat IDs
-          const chatIds = await getAllChatIds();
-          const messageText = `تم اخذ العلاج ${medication.name} في الموعد: ${medication.time}`;
-          for (const chat of chatIds) {
-            await sendTelegramMessage(chat.chatId, messageText);
-          }
-
-          // Answer callback query
-          await axios.post(
-            `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/answerCallbackQuery`,
-            {
-              callback_query_id: callback_query.id,
-              text: 'تم تسجيل التناول بنجاح'
-            }
-          );
+      // تجاهل جميع الـ callback queries
+      await axios.post(
+        `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/answerCallbackQuery`,
+        {
+          callback_query_id: callback_query.id,
+          text: 'هذه الميزة غير متاحة حالياً'
         }
-      } else if (data.startsWith('remind_')) {
-        const medicationId = data.replace('remind_', '');
-        const medication = await getMedicationById(medicationId);
-
-        if (medication) {
-          // Send reminder after 10 minutes
-          setTimeout(async () => {
-            const messageText = `تذكير: حان موعد تناول دواء ${medication.name} الساعة ${medication.time}`;
-            await sendTelegramMessage(
-              from.id,
-              messageText,
-              createMedicationKeyboard(medicationId)
-            );
-          }, 10 * 60 * 1000);
-
-          await sendTelegramMessage(
-            from.id,
-            `تم تأجيل تذكير دواء ${medication.name} لمدة 10 دقائق`
-          );
-
-          // Answer callback query
-          await axios.post(
-            `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/answerCallbackQuery`,
-            {
-              callback_query_id: callback_query.id,
-              text: 'تم تأجيل التذكير 10 دقائق'
-            }
-          );
-        }
-      }
-
+      );
       res.sendStatus(200);
       return;
     }
@@ -1074,7 +1042,8 @@ app.post('/api/webhook/telegram', async (req, res) => {
           telegramId: message.from.id
         });
         
-        const welcomeMessage = `مرحبا\nتم اضافة رقمكم الى موقع "نظام تذكير الأدوية (لطيف)"\nللمتابعة برجاء زيارة الويب:\n${WEBSITE_URL}`;
+        const userName = message.from.username || message.from.first_name || 'عزيزي المستخدم';
+        const welcomeMessage = `مرحبا ${userName}\nتم اضافة رقمكم الى موقع "نظام تذكير الأدوية (لطيف)"\nللمتابعة برجاء زيارة الويب:\n${WEBSITE_URL}`;
         await sendTelegramMessage(message.from.id, welcomeMessage);
       }
 
@@ -1084,14 +1053,15 @@ app.post('/api/webhook/telegram', async (req, res) => {
       if (!existingChat) {
         // Auto-save new chat ID when user sends a message
         const chatIdsRef = db.ref('chat_ids');
+        const userName = message.from.username || message.from.first_name || `User ${message.from.id}`;
         await chatIdsRef.push({
           chatId: String(message.from.id),
-          name: message.from.username || `User ${message.from.id}`,
+          name: userName,
           createdAt: new Date().toISOString(),
           autoAdded: true
         });
         
-        const welcomeMessage = `مرحبا\nتم اضافة رقمكم الى موقع "نظام تذكير الأدوية (لطيف)"\nللمتابعة برجاء زيارة الويب:\n${WEBSITE_URL}`;
+        const welcomeMessage = `مرحبا ${userName}\nتم اضافة رقمكم الى موقع "نظام تذكير الأدوية (لطيف)"\nللمتابعة برجاء زيارة الويب:\n${WEBSITE_URL}`;
         await sendTelegramMessage(message.from.id, welcomeMessage);
       }
     }
