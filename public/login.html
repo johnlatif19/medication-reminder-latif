@@ -3,24 +3,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>تسجيل الدخول</title>
+    <title>تسجيل الدخول - نظام تذكير الأدوية</title>
     <style>
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
-        
+
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
             display: flex;
-            align-items: center;
             justify-content: center;
+            align-items: center;
             padding: 20px;
         }
-        
+
         .login-container {
             background: white;
             border-radius: 20px;
@@ -29,122 +29,103 @@
             width: 100%;
             box-shadow: 0 20px 60px rgba(0,0,0,0.3);
         }
-        
-        h2 {
+
+        .login-container h1 {
             text-align: center;
-            color: #333;
-            margin-bottom: 10px;
-        }
-        
-        .subtitle {
-            text-align: center;
-            color: #666;
+            color: #4a4a4a;
             margin-bottom: 30px;
+            font-size: 24px;
         }
-        
+
         .form-group {
             margin-bottom: 20px;
         }
-        
-        label {
+
+        .form-group label {
             display: block;
             margin-bottom: 8px;
             color: #555;
-            font-weight: 500;
+            font-weight: 600;
         }
-        
-        input {
+
+        .form-group input {
             width: 100%;
             padding: 12px 15px;
-            border: 2px solid #e0e0e0;
+            border: 2px solid #e2e8f0;
             border-radius: 10px;
             font-size: 16px;
-            transition: border-color 0.3s;
+            transition: all 0.3s ease;
             font-family: inherit;
         }
-        
-        input:focus {
+
+        .form-group input:focus {
             outline: none;
             border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
         }
-        
-        .btn-login {
+
+        .btn {
             width: 100%;
             padding: 14px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
             border: none;
             border-radius: 10px;
-            font-size: 18px;
+            background: #667eea;
+            color: white;
+            font-size: 16px;
+            font-weight: 600;
             cursor: pointer;
-            transition: transform 0.3s, box-shadow 0.3s;
-            font-weight: 500;
+            transition: all 0.3s ease;
+            font-family: inherit;
         }
-        
-        .btn-login:hover {
+
+        .btn:hover {
+            background: #5a67d8;
             transform: translateY(-2px);
-            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
         }
-        
-        .btn-login:disabled {
+
+        .btn:disabled {
             opacity: 0.6;
             cursor: not-allowed;
+            transform: none;
         }
-        
-        .error-message {
-            background: #fee;
-            color: #c33;
-            padding: 10px;
-            border-radius: 8px;
+
+        .message {
+            padding: 12px;
+            border-radius: 10px;
             margin-bottom: 20px;
+            text-align: center;
             display: none;
         }
-        
-        .success-message {
-            background: #efe;
-            color: #3c3;
-            padding: 10px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            display: none;
+
+        .message.success {
+            display: block;
+            background: #c6f6d5;
+            color: #22543d;
+            border: 1px solid #9ae6b4;
         }
-        
+
+        .message.error {
+            display: block;
+            background: #fed7d7;
+            color: #742a2a;
+            border: 1px solid #feb2b2;
+        }
+
         .back-link {
+            display: block;
             text-align: center;
             margin-top: 20px;
-        }
-        
-        .back-link a {
             color: #667eea;
             text-decoration: none;
+            font-weight: 500;
         }
-        
-        .back-link a:hover {
+
+        .back-link:hover {
             text-decoration: underline;
         }
-        
-        .loading {
-            display: none;
-            text-align: center;
-            margin-top: 10px;
-        }
-        
-        .spinner {
-            border: 3px solid #f3f3f3;
-            border-top: 3px solid #667eea;
-            border-radius: 50%;
-            width: 30px;
-            height: 30px;
-            animation: spin 1s linear infinite;
-            margin: 0 auto;
-        }
-        
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        
-        @media (max-width: 600px) {
+
+        @media (max-width: 480px) {
             .login-container {
                 padding: 30px 20px;
             }
@@ -153,98 +134,97 @@
 </head>
 <body>
     <div class="login-container">
-        <h2>تسجيل الدخول</h2>
-        <p class="subtitle">لوحة التحكم - نظام تذكير الأدوية</p>
-        
-        <div id="errorMessage" class="error-message"></div>
-        <div id="successMessage" class="success-message"></div>
-        
+        <h1>تسجيل الدخول</h1>
+
+        <div id="message" class="message"></div>
+
         <form id="loginForm">
             <div class="form-group">
                 <label for="username">اسم المستخدم</label>
                 <input type="text" id="username" placeholder="أدخل اسم المستخدم" required>
             </div>
-            
+
             <div class="form-group">
                 <label for="password">كلمة المرور</label>
                 <input type="password" id="password" placeholder="أدخل كلمة المرور" required>
             </div>
-            
-            <button type="submit" class="btn-login" id="loginBtn">تسجيل الدخول</button>
-            
-            <div class="loading" id="loading">
-                <div class="spinner"></div>
-                <p style="margin-top: 10px; color: #666;">جاري تسجيل الدخول...</p>
-            </div>
+
+            <button type="submit" class="btn" id="loginBtn">تسجيل الدخول</button>
         </form>
-        
-        <div class="back-link">
-            <a href="/">↩ العودة للصفحة الرئيسية</a>
-        </div>
+
+        <a href="/" class="back-link">← العودة للصفحة الرئيسية</a>
     </div>
 
     <script>
-        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+        const form = document.getElementById('loginForm');
+        const messageEl = document.getElementById('message');
+        const loginBtn = document.getElementById('loginBtn');
+
+        function showMessage(text, type) {
+            messageEl.textContent = text;
+            messageEl.className = `message ${type}`;
+        }
+
+        form.addEventListener('submit', async (e) => {
             e.preventDefault();
-            
-            const username = document.getElementById('username').value;
-            const password = document.getElementById('password').value;
-            const errorDiv = document.getElementById('errorMessage');
-            const successDiv = document.getElementById('successMessage');
-            const loginBtn = document.getElementById('loginBtn');
-            const loading = document.getElementById('loading');
-            
-            errorDiv.style.display = 'none';
-            successDiv.style.display = 'none';
-            errorDiv.textContent = '';
-            successDiv.textContent = '';
-            
+
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value.trim();
+
+            if (!username || !password) {
+                showMessage('الرجاء تعبئة جميع الحقول', 'error');
+                return;
+            }
+
             loginBtn.disabled = true;
-            loading.style.display = 'block';
-            
+            loginBtn.textContent = 'جاري تسجيل الدخول...';
+            showMessage('', '');
+
             try {
                 const response = await fetch('/api/login', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ username, password })
+                    body: JSON.stringify({ username, password }),
+                    credentials: 'include'
                 });
-                
+
                 const data = await response.json();
-                
-                if (response.ok && data.success) {
-                    successDiv.textContent = ' ' + data.message;
-                    successDiv.style.display = 'block';
-                    
+
+                if (response.ok) {
+                    showMessage('تم تسجيل الدخول بنجاح، جاري التحويل...', 'success');
                     setTimeout(() => {
                         window.location.href = '/dashboard';
                     }, 1000);
                 } else {
-                    errorDiv.textContent = ' ' + (data.error || 'فشل تسجيل الدخول');
-                    errorDiv.style.display = 'block';
+                    showMessage(data.error || 'فشل تسجيل الدخول', 'error');
                 }
             } catch (error) {
-                errorDiv.textContent = ' حدث خطأ في الاتصال بالخادم';
-                errorDiv.style.display = 'block';
                 console.error('Login error:', error);
+                showMessage('حدث خطأ في الاتصال بالخادم', 'error');
             } finally {
                 loginBtn.disabled = false;
-                loading.style.display = 'none';
+                loginBtn.textContent = 'تسجيل الدخول';
             }
         });
-        
+
+        // Check if already authenticated
         async function checkAuth() {
             try {
-                const response = await fetch('/api/check-auth');
+                const response = await fetch('/api/check-auth', {
+                    credentials: 'include'
+                });
                 const data = await response.json();
+
                 if (data.authenticated) {
                     window.location.href = '/dashboard';
                 }
             } catch (error) {
-                console.error('Auth check error:', error);
+                console.error('Error checking auth:', error);
             }
         }
+
         checkAuth();
     </script>
 </body>
