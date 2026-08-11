@@ -658,18 +658,20 @@ app.put('/api/medications/reset-all', authenticateToken, async (req, res) => {
       return res.json({ success: true, message: 'No medications to reset' });
     }
 
-    const updates = {};
     for (const med of medications) {
-      updates[`${med.key}/taken`] = false;
-      updates[`${med.key}/lastTaken`] = null;
-      updates[`${med.key}/resetAt`] = new Date().toISOString();
+      if (med.key) {
+        const medRef = db.ref(`medications/${med.key}`);
+        await medRef.update({
+          taken: false,
+          lastTaken: null,
+          resetAt: new Date().toISOString()
+        });
+      }
     }
-
-    const medsRef = db.ref('medications');
-    await medsRef.update(updates);
 
     res.json({ success: true, message: 'All medications reset successfully' });
   } catch (error) {
+    console.error('Error resetting all medications:', error);
     res.status(500).json({ error: error.message });
   }
 });
