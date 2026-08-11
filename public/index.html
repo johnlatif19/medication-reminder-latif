@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>نظام تذكير الأدوية(لطيف)</title>
+    <title>نظام تذكير الأدوية (لطيف)</title>
     <style>
         * {
             margin: 0;
@@ -161,26 +161,6 @@
             font-size: 14px;
         }
 
-        .filter-section {
-            background: white;
-            border-radius: 15px;
-            padding: 20px;
-            margin-bottom: 30px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-            display: flex;
-            gap: 15px;
-            align-items: center;
-            flex-wrap: wrap;
-        }
-
-        .filter-section input[type="date"] {
-            padding: 10px 15px;
-            border: 2px solid #e2e8f0;
-            border-radius: 8px;
-            font-size: 14px;
-            font-family: inherit;
-        }
-
         .medications-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
@@ -249,21 +229,6 @@
             color: #2d3748;
         }
 
-        .medication-card .actions {
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-            margin-top: 15px;
-        }
-
-        .medication-card .actions .btn {
-            flex: 1;
-            min-width: 80px;
-            text-align: center;
-            font-size: 12px;
-            padding: 8px 15px;
-        }
-
         .no-data {
             text-align: center;
             padding: 50px 20px;
@@ -311,14 +276,6 @@
                 justify-content: center;
             }
 
-            .filter-section {
-                flex-direction: column;
-            }
-
-            .filter-section input[type="date"] {
-                width: 100%;
-            }
-
             .medications-grid {
                 grid-template-columns: 1fr;
             }
@@ -356,14 +313,6 @@
             </div>
         </div>
 
-        <!-- Filter -->
-        <div class="filter-section">
-            <label for="filterDate">تصفية بالتاريخ:</label>
-            <input type="date" id="filterDate">
-            <button class="btn btn-primary" onclick="applyFilter()">تصفية</button>
-            <button class="btn btn-outline" onclick="clearFilter()">إلغاء التصفية</button>
-        </div>
-
         <!-- Medications Grid -->
         <div class="medications-grid" id="medicationsGrid">
             <!-- Medications will be loaded here -->
@@ -376,7 +325,6 @@
     <script>
         // Global state
         let allMedications = [];
-        let currentFilter = null;
 
         // Load medications
         async function loadMedications() {
@@ -435,11 +383,6 @@
                             ${isTakenToday ? 'تم التناول اليوم' : 'في الانتظار'}
                         </div>
                         ${takenInfo}
-                        <div class="actions">
-                            <button class="btn btn-success" onclick="markAsTaken('${med.id}')" ${isTakenToday ? 'disabled' : ''}>
-                                تم التناول
-                            </button>
-                        </div>
                     </div>
                 `;
             }).join('');
@@ -456,50 +399,6 @@
             document.getElementById('pendingMeds').textContent = pending;
         }
 
-        // Apply filter
-        function applyFilter() {
-            const date = document.getElementById('filterDate').value;
-            if (!date) {
-                alert('الرجاء اختيار تاريخ');
-                return;
-            }
-
-            // For now, we just display all medications with filter info
-            renderMedications(allMedications);
-            currentFilter = date;
-        }
-
-        // Clear filter
-        function clearFilter() {
-            document.getElementById('filterDate').value = '';
-            renderMedications(allMedications);
-            currentFilter = null;
-        }
-
-        // Mark medication as taken (public view - no auth required)
-        async function markAsTaken(id) {
-            if (!confirm('هل أنت متأكد من أنك تناولت هذا الدواء؟')) {
-                return;
-            }
-
-            try {
-                const response = await fetch(`/api/medications/${id}/take`, {
-                    method: 'PUT'
-                });
-
-                if (response.ok) {
-                    alert('تم تسجيل تناول الدواء بنجاح');
-                    loadMedications(); // Refresh the page
-                } else {
-                    const error = await response.json();
-                    alert(`خطأ: ${error.error || 'حدث خطأ'}`);
-                }
-            } catch (error) {
-                console.error('Error marking as taken:', error);
-                alert('حدث خطأ في تسجيل التناول');
-            }
-        }
-
         // Auto-refresh every 5 seconds
         setInterval(() => {
             loadMedications();
@@ -508,10 +407,6 @@
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
             loadMedications();
-
-            // Set default date to today
-            const today = new Date().toISOString().split('T')[0];
-            document.getElementById('filterDate').value = today;
         });
     </script>
 </body>
