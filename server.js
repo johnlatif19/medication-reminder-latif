@@ -64,6 +64,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'admin';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'SecurePass123!';
 const TIMEZONE = 'Africa/Cairo';
+const WEBSITE_URL = 'https://medication-reminder-latif.vercel.app';
 
 // Default medications
 const DEFAULT_MEDICATIONS = [
@@ -137,7 +138,7 @@ const authenticateToken = (req, res, next) => {
   }
 };
 
-// Helper function to send Telegram message
+// Helper function to send Telegram message with website link
 async function sendTelegramMessage(chatId, text, replyMarkup = null) {
   if (!TELEGRAM_BOT_TOKEN) {
     console.error('TELEGRAM_BOT_TOKEN not configured');
@@ -146,9 +147,13 @@ async function sendTelegramMessage(chatId, text, replyMarkup = null) {
 
   try {
     const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
+    
+    // Add website link to the message
+    const messageWithLink = `${text}\n\nللمتابعة برجاء زيارة الويب:\n${WEBSITE_URL}`;
+    
     const payload = {
       chat_id: chatId,
-      text: text,
+      text: messageWithLink,
       parse_mode: 'HTML'
     };
 
@@ -873,6 +878,10 @@ app.post('/api/chat-ids', authenticateToken, async (req, res) => {
     const ref = await chatIdsRef.push(newChat);
     const chat = { ...newChat, id: ref.key, key: ref.key };
 
+    // Send welcome message when chat ID is added manually
+    const welcomeMessage = `مرحبا\nتم اضافة رقمكم الى موقع "نظام تذكير الأدوية (لطيف)"\nللمتابعة برجاء زيارة الويب:\n${WEBSITE_URL}`;
+    await sendTelegramMessage(chatId, welcomeMessage);
+
     res.status(201).json(chat);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -914,10 +923,8 @@ app.post('/api/telegram/test', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Telegram ID is required' });
     }
 
-    const success = await sendTelegramMessage(
-      telegramId,
-      'هذا رسالة اختبارية من نظام تذكير الأدوية'
-    );
+    const message = 'هذا رسالة اختبارية من نظام تذكير الأدوية';
+    const success = await sendTelegramMessage(telegramId, message);
 
     if (success) {
       res.json({ success: true, message: 'Test message sent successfully' });
@@ -1004,9 +1011,9 @@ app.post('/api/webhook/telegram', async (req, res) => {
 
           // Notify all chat IDs
           const chatIds = await getAllChatIds();
-          const message = `تم اخذ العلاج ${medication.name} في الموعد: ${medication.time}`;
+          const messageText = `تم اخذ العلاج ${medication.name} في الموعد: ${medication.time}`;
           for (const chat of chatIds) {
-            await sendTelegramMessage(chat.chatId, message);
+            await sendTelegramMessage(chat.chatId, messageText);
           }
 
           // Answer callback query
@@ -1025,10 +1032,10 @@ app.post('/api/webhook/telegram', async (req, res) => {
         if (medication) {
           // Send reminder after 10 minutes
           setTimeout(async () => {
-            const message = `تذكير: حان موعد تناول دواء ${medication.name} الساعة ${medication.time}`;
+            const messageText = `تذكير: حان موعد تناول دواء ${medication.name} الساعة ${medication.time}`;
             await sendTelegramMessage(
               from.id,
-              message,
+              messageText,
               createMedicationKeyboard(medicationId)
             );
           }, 10 * 60 * 1000);
@@ -1066,10 +1073,9 @@ app.post('/api/webhook/telegram', async (req, res) => {
         await patientRef.update({
           telegramId: message.from.id
         });
-        await sendTelegramMessage(
-          message.from.id,
-          'تم تسجيل حسابك بنجاح في نظام تذكير الأدوية'
-        );
+        
+        const welcomeMessage = `مرحبا\nتم اضافة رقمكم الى موقع "نظام تذكير الأدوية (لطيف)"\nللمتابعة برجاء زيارة الويب:\n${WEBSITE_URL}`;
+        await sendTelegramMessage(message.from.id, welcomeMessage);
       }
 
       // Also check if this chat ID is in the chat_ids list
@@ -1084,10 +1090,9 @@ app.post('/api/webhook/telegram', async (req, res) => {
           createdAt: new Date().toISOString(),
           autoAdded: true
         });
-        await sendTelegramMessage(
-          message.from.id,
-          'تم إضافة معرفك تلقائياً في نظام تذكير الأدوية'
-        );
+        
+        const welcomeMessage = `مرحبا\nتم اضافة رقمكم الى موقع "نظام تذكير الأدوية (لطيف)"\nللمتابعة برجاء زيارة الويب:\n${WEBSITE_URL}`;
+        await sendTelegramMessage(message.from.id, welcomeMessage);
       }
     }
 
