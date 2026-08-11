@@ -31,15 +31,12 @@ try {
   if (process.env.FIREBASE_CONFIG) {
     const firebaseConfig = JSON.parse(process.env.FIREBASE_CONFIG);
     
-    // الحصول على databaseURL من الـ config أو من متغير منفصل
     let databaseURL = firebaseConfig.databaseURL;
     
-    // إذا لم يكن موجوداً، حاول بناءه من project_id
     if (!databaseURL && firebaseConfig.project_id) {
       databaseURL = `https://${firebaseConfig.project_id}-default-rtdb.firebaseio.com`;
     }
     
-    // إذا كان موجوداً في متغير البيئة
     if (process.env.FIREBASE_DATABASE_URL) {
       databaseURL = process.env.FIREBASE_DATABASE_URL;
     }
@@ -91,7 +88,6 @@ async function initializeDefaultData() {
   if (!firebaseInitialized) return;
 
   try {
-    // Check if medications exist
     const medsRef = db.ref('medications');
     const medsSnapshot = await medsRef.once('value');
     if (!medsSnapshot.exists()) {
@@ -110,7 +106,6 @@ async function initializeDefaultData() {
       console.log('Default medications added');
     }
 
-    // Check if patient exists
     const patientsRef = db.ref('patients');
     const patientsSnapshot = await patientsRef.once('value');
     if (!patientsSnapshot.exists()) {
@@ -353,7 +348,6 @@ async function runScheduler() {
       return;
     }
 
-    // Filter patients with telegram ID
     const activePatients = patients.filter(p => p.telegramId && p.isActive !== false);
 
     if (activePatients.length === 0) {
@@ -361,23 +355,24 @@ async function runScheduler() {
       return;
     }
 
-    // Check each medication
     for (const medication of medications) {
-      // Check if medication time matches current time (within 5 minutes)
+      // Only send reminder if medication is NOT taken today
+      if (medication.taken) {
+        console.log(`Medication ${medication.name} already taken today, skipping reminder`);
+        continue;
+      }
+
       const medTime = moment(medication.time, 'HH:mm');
       const current = moment(currentTime, 'HH:mm');
       const diffMinutes = Math.abs(current.diff(medTime, 'minutes'));
 
-      // Only send reminder if time matches (within 5 minutes) and not taken today
       if (diffMinutes <= 5) {
-        // Check if already reminded today
         const alreadyReminded = await getReminderLog(medication.id, today);
 
         if (!alreadyReminded) {
           console.log(`Sending reminder for ${medication.name} at ${medication.time}`);
 
-          // Send reminder to all active patients
-          const message = `تذكير: حان موعد تناول دواء ${medication.name}`;
+          const message = `تذكير: حان موعد تناول دواء ${medication.name} الساعة ${medication.time}`;
 
           for (const patient of activePatients) {
             const success = await sendTelegramMessage(
@@ -393,7 +388,6 @@ async function runScheduler() {
             }
           }
 
-          // Log the reminder
           await addReminderLog(medication.id, today);
         }
       }
@@ -453,7 +447,7 @@ app.post('/api/login', (req, res) => {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 24 * 60 * 60 * 1000 // 24 hours
+      maxAge: 24 * 60 * 60 * 1000
     });
 
     res.json({ success: true, message: 'Login successful' });
@@ -507,8 +501,6 @@ app.post('/api/medications/filter', async (req, res) => {
     const { date } = req.body;
     const medications = await getAllMedications();
 
-    // For now, return all medications with filter info
-    // In a real implementation, you might filter by date
     const filtered = medications.map(med => ({
       ...med,
       filtered: true,
@@ -608,12 +600,13 @@ app.put('/api/medications/:id/take', authenticateToken, async (req, res) => {
       lastTaken: new Date().toISOString()
     });
 
-    // Send notification to all patients
+    // Send notification to all patients with the fixed medication time
     const patients = await getAllPatients();
     const activePatients = patients.filter(p => p.telegramId && p.isActive !== false);
 
     if (activePatients.length > 0) {
-      const message = `تم تناول دواء ${medication.name} الساعة ${moment().tz(TIMEZONE).format('HH:mm')}`;
+      // Use the fixed medication time (medication.time) instead of current time
+      const message = `تم اخذ العلاج ${medication.name} في الموعد: ${medication.time}`;
       for (const patient of activePatients) {
         await sendTelegramMessage(patient.telegramId, message);
       }
@@ -647,6 +640,35 @@ app.put('/api/medications/:id/reset', authenticateToken, async (req, res) => {
     });
 
     res.json({ success: true, message: 'Medication status reset successfully' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Reset all medications taken status
+app.put('/api/medications/reset-all', authenticateToken, async (req, res) => {
+  if (!firebaseInitialized) {
+    return res.status(500).json({ error: 'Firebase not initialized' });
+  }
+
+  try {
+    const medications = await getAllMedications();
+    
+    if (medications.length === 0) {
+      return res.json({ success: true, message: 'No medications to reset' });
+    }
+
+    const updates = {};
+    for (const med of medications) {
+      updates[`${med.key}/taken`] = false;
+      updates[`${med.key}/lastTaken`] = null;
+      updates[`${med.key}/resetAt`] = new Date().toISOString();
+    }
+
+    const medsRef = db.ref('medications');
+    await medsRef.update(updates);
+
+    res.json({ success: true, message: 'All medications reset successfully' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -875,10 +897,11 @@ app.post('/api/webhook/telegram', async (req, res) => {
             `تم تسجيل تناول دواء ${medication.name} بنجاح`
           );
 
-          // Notify all patients
+          // Notify all patients with the fixed medication time
           const patients = await getAllPatients();
           const activePatients = patients.filter(p => p.telegramId && p.isActive !== false);
-          const message = `تم تناول دواء ${medication.name} الساعة ${moment().tz(TIMEZONE).format('HH:mm')}`;
+          // Use the fixed medication time (medication.time) instead of current time
+          const message = `تم اخذ العلاج ${medication.name} في الموعد: ${medication.time}`;
           for (const patient of activePatients) {
             await sendTelegramMessage(patient.telegramId, message);
           }
@@ -899,7 +922,7 @@ app.post('/api/webhook/telegram', async (req, res) => {
         if (medication) {
           // Send reminder after 10 minutes
           setTimeout(async () => {
-            const message = `تذكير: حان موعد تناول دواء ${medication.name}`;
+            const message = `تذكير: حان موعد تناول دواء ${medication.name} الساعة ${medication.time}`;
             await sendTelegramMessage(
               from.id,
               message,
