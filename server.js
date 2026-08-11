@@ -254,6 +254,33 @@ async function getAllPatients() {
   }
 }
 
+// ==================== HELPER FUNCTION FOR CHAT IDs ====================
+// Helper function to get all chat IDs
+async function getAllChatIds() {
+  if (!firebaseInitialized) return [];
+
+  try {
+    const chatIdsRef = db.ref('chat_ids');
+    const snapshot = await chatIdsRef.once('value');
+    if (!snapshot.exists()) return [];
+
+    const chatIds = [];
+    snapshot.forEach((childSnapshot) => {
+      const data = childSnapshot.val();
+      chatIds.push({
+        ...data,
+        key: childSnapshot.key,
+        id: childSnapshot.key
+      });
+    });
+    return chatIds;
+  } catch (error) {
+    console.error('Error getting chat IDs:', error);
+    return [];
+  }
+}
+// ==================== END HELPER FUNCTION ====================
+
 // Helper function to get all medications
 async function getAllMedications() {
   if (!firebaseInitialized) return [];
@@ -341,17 +368,11 @@ async function runScheduler() {
     console.log(`Current time (${TIMEZONE}): ${currentTime}`);
 
     const medications = await getAllMedications();
-    const patients = await getAllPatients();
-
-    if (patients.length === 0) {
-      console.log('No patients found');
-      return;
-    }
-
-    const activePatients = patients.filter(p => p.telegramId && p.isActive !== false);
-
-    if (activePatients.length === 0) {
-      console.log('No active patients with Telegram IDs');
+    const chatIds = await getAllChatIds(); // استخدام دالة جلب Chat IDs
+    
+    // استخدام Chat IDs بدلاً من المرضى
+    if (chatIds.length === 0) {
+      console.log('No chat IDs found');
       return;
     }
 
@@ -374,17 +395,18 @@ async function runScheduler() {
 
           const message = `تذكير: حان موعد تناول دواء ${medication.name} الساعة ${medication.time}`;
 
-          for (const patient of activePatients) {
+          // إرسال لجميع Chat IDs المحفوظة
+          for (const chat of chatIds) {
             const success = await sendTelegramMessage(
-              patient.telegramId,
+              chat.chatId,
               message,
               createMedicationKeyboard(medication.id)
             );
 
             if (success) {
-              console.log(`Reminder sent to ${patient.name}`);
+              console.log(`Reminder sent to chat ID: ${chat.chatId}`);
             } else {
-              console.log(`Failed to send reminder to ${patient.name}`);
+              console.log(`Failed to send reminder to chat ID: ${chat.chatId}`);
             }
           }
 
@@ -600,15 +622,13 @@ app.put('/api/medications/:id/take', authenticateToken, async (req, res) => {
       lastTaken: new Date().toISOString()
     });
 
-    // Send notification to all patients with the fixed medication time
-    const patients = await getAllPatients();
-    const activePatients = patients.filter(p => p.telegramId && p.isActive !== false);
+    // Send notification to all chat IDs
+    const chatIds = await getAllChatIds();
 
-    if (activePatients.length > 0) {
-      // Use the fixed medication time (medication.time) instead of current time
+    if (chatIds.length > 0) {
       const message = `تم اخذ العلاج ${medication.name} في الموعد: ${medication.time}`;
-      for (const patient of activePatients) {
-        await sendTelegramMessage(patient.telegramId, message);
+      for (const chat of chatIds) {
+        await sendTelegramMessage(chat.chatId, message);
       }
     }
 
@@ -802,6 +822,81 @@ app.delete('/api/patients/:id', authenticateToken, async (req, res) => {
   }
 });
 
+// ==================== CHAT IDs ROUTES ====================
+
+// Get all chat IDs
+app.get('/api/chat-ids', authenticateToken, async (req, res) => {
+  if (!firebaseInitialized) {
+    return res.status(500).json({ error: 'Firebase not initialized' });
+  }
+
+  try {
+    const chatIds = await getAllChatIds();
+    res.json(chatIds);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Add chat ID
+app.post('/api/chat-ids', authenticateToken, async (req, res) => {
+  if (!firebaseInitialized) {
+    return res.status(500).json({ error: 'Firebase not initialized' });
+  }
+
+  try {
+    const { chatId, name } = req.body;
+
+    if (!chatId) {
+      return res.status(400).json({ error: 'Chat ID is required' });
+    }
+
+    // Check if chat ID already exists
+    const chatIdsRef = db.ref('chat_ids');
+    const snapshot = await chatIdsRef.orderByChild('chatId').equalTo(chatId).once('value');
+    if (snapshot.exists()) {
+      return res.status(400).json({ error: 'Chat ID already exists' });
+    }
+
+    const newChat = {
+      chatId,
+      name: name || null,
+      createdAt: new Date().toISOString()
+    };
+
+    const ref = await chatIdsRef.push(newChat);
+    const chat = { ...newChat, id: ref.key, key: ref.key };
+
+    res.status(201).json(chat);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete chat ID
+app.delete('/api/chat-ids/:id', authenticateToken, async (req, res) => {
+  if (!firebaseInitialized) {
+    return res.status(500).json({ error: 'Firebase not initialized' });
+  }
+
+  try {
+    const { id } = req.params;
+    const chatIdsRef = db.ref('chat_ids');
+    const snapshot = await chatIdsRef.child(id).once('value');
+    
+    if (!snapshot.exists()) {
+      return res.status(404).json({ error: 'Chat ID not found' });
+    }
+
+    await chatIdsRef.child(id).remove();
+    res.json({ success: true, message: 'Chat ID deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==================== END CHAT IDs ROUTES ====================
+
 // Test Telegram
 app.post('/api/telegram/test', authenticateToken, async (req, res) => {
   try {
@@ -899,13 +994,11 @@ app.post('/api/webhook/telegram', async (req, res) => {
             `تم تسجيل تناول دواء ${medication.name} بنجاح`
           );
 
-          // Notify all patients with the fixed medication time
-          const patients = await getAllPatients();
-          const activePatients = patients.filter(p => p.telegramId && p.isActive !== false);
-          // Use the fixed medication time (medication.time) instead of current time
+          // Notify all chat IDs
+          const chatIds = await getAllChatIds();
           const message = `تم اخذ العلاج ${medication.name} في الموعد: ${medication.time}`;
-          for (const patient of activePatients) {
-            await sendTelegramMessage(patient.telegramId, message);
+          for (const chat of chatIds) {
+            await sendTelegramMessage(chat.chatId, message);
           }
 
           // Answer callback query
@@ -956,7 +1049,7 @@ app.post('/api/webhook/telegram', async (req, res) => {
     if (message && message.text) {
       console.log(`Received message from ${message.from.id}: ${message.text}`);
 
-      // Store Telegram ID if patient exists
+      // Store Telegram ID if patient exists (for backward compatibility)
       const patients = await getAllPatients();
       const patient = patients.find(p => p.name === 'لطيف');
 
@@ -968,6 +1061,24 @@ app.post('/api/webhook/telegram', async (req, res) => {
         await sendTelegramMessage(
           message.from.id,
           'تم تسجيل حسابك بنجاح في نظام تذكير الأدوية'
+        );
+      }
+
+      // Also check if this chat ID is in the chat_ids list
+      const chatIds = await getAllChatIds();
+      const existingChat = chatIds.find(c => c.chatId === String(message.from.id));
+      if (!existingChat) {
+        // Auto-save new chat ID when user sends a message
+        const chatIdsRef = db.ref('chat_ids');
+        await chatIdsRef.push({
+          chatId: String(message.from.id),
+          name: message.from.username || `User ${message.from.id}`,
+          createdAt: new Date().toISOString(),
+          autoAdded: true
+        });
+        await sendTelegramMessage(
+          message.from.id,
+          'تم إضافة معرفك تلقائياً في نظام تذكير الأدوية'
         );
       }
     }
