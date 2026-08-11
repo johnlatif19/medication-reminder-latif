@@ -1,11 +1,15 @@
 {
   "version": 2,
-  "functions": {
-    "server.js": {
-      "maxDuration": 10,
-      "memory": 1024
+  "builds": [
+    {
+      "src": "server.js",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "public/**",
+      "use": "@vercel/static"
     }
-  },
+  ],
   "routes": [
     {
       "src": "/",
@@ -20,11 +24,8 @@
       "dest": "/public/dashboard.html"
     },
     {
-      "src": "/(.*)",
-      "dest": "/server.js"
+      "src": "/api/(.*)",
+      "dest": "server.js"
     }
-  ],
-  "env": {
-    "NODE_ENV": "production"
-  }
+  ]
 }
