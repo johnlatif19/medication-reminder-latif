@@ -636,17 +636,20 @@ app.put('/api/medications/:id/take', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Medication not found' });
     }
 
+    const now = moment().tz(TIMEZONE);
+    const takenTime = now.format('HH:mm');
+    
     const medRef = db.ref(`medications/${medication.key}`);
     await medRef.update({
       taken: true,
       lastTaken: new Date().toISOString()
     });
 
-    // Send notification to all chat IDs
+    // Send notification to all chat IDs with the correct format
     const chatIds = await getAllChatIds();
 
     if (chatIds.length > 0) {
-      const message = `تم اخذ العلاج ${medication.name} في الموعد: ${medication.time}`;
+      const message = `تم اخذ العلاج ${medication.name} الذي موعده : ${medication.time} في الموعد ${takenTime}`;
       for (const chat of chatIds) {
         await sendTelegramMessage(chat.chatId, message);
       }
