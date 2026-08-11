@@ -625,6 +625,33 @@ app.put('/api/medications/:id/take', authenticateToken, async (req, res) => {
   }
 });
 
+// Reset medication taken status
+app.put('/api/medications/:id/reset', authenticateToken, async (req, res) => {
+  if (!firebaseInitialized) {
+    return res.status(500).json({ error: 'Firebase not initialized' });
+  }
+
+  try {
+    const { id } = req.params;
+    const medication = await getMedicationById(id);
+
+    if (!medication) {
+      return res.status(404).json({ error: 'Medication not found' });
+    }
+
+    const medRef = db.ref(`medications/${medication.key}`);
+    await medRef.update({
+      taken: false,
+      lastTaken: null,
+      resetAt: new Date().toISOString()
+    });
+
+    res.json({ success: true, message: 'Medication status reset successfully' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Delete medication
 app.delete('/api/medications/:id', authenticateToken, async (req, res) => {
   if (!firebaseInitialized) {
