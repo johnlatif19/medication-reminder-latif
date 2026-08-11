@@ -148,8 +148,12 @@ async function sendTelegramMessage(chatId, text) {
   try {
     const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
     
-    // Add website link to the message
-    const messageWithLink = `${text}\n\nللمتابعة برجاء زيارة الويب:\n${WEBSITE_URL}`;
+    // Add website link to the message (only if not already a welcome message)
+    let messageWithLink = text;
+    // Check if text already contains the website link
+    if (!text.includes(WEBSITE_URL)) {
+      messageWithLink = `${text}\n\nللمتابعة برجاء زيارة الويب:\n${WEBSITE_URL}`;
+    }
     
     const payload = {
       chat_id: chatId,
@@ -348,6 +352,64 @@ async function addReminderLog(medicationId, date) {
   } catch (error) {
     console.error('Error adding reminder log:', error);
     return false;
+  }
+}
+
+// Helper function to generate daily report
+async function generateDailyReport() {
+  if (!firebaseInitialized) return null;
+
+  try {
+    const medications = await getAllMedications();
+    const now = moment().tz(TIMEZONE);
+    const today = now.format('YYYY-MM-DD');
+    
+    let report = `تقرير الأدوية لليوم ${today}:\n\n`;
+    let takenCount = 0;
+    let totalCount = medications.length;
+    let earlyCount = 0;
+    let lateCount = 0;
+    let onTimeCount = 0;
+    
+    for (const med of medications) {
+      const expectedTime = moment(med.time, 'HH:mm');
+      const status = med.taken ? 'تم التناول' : 'لم يتم التناول';
+      
+      if (med.taken && med.lastTaken) {
+        const actualTime = moment(med.lastTaken).tz(TIMEZONE);
+        const diffMinutes = actualTime.diff(expectedTime, 'minutes');
+        
+        let timeStatus = '';
+        if (diffMinutes < -5) {
+          timeStatus = ` (متقدم ${Math.abs(diffMinutes)} دقيقة)`;
+          earlyCount++;
+        } else if (diffMinutes > 5) {
+          timeStatus = ` (متأخر ${diffMinutes} دقيقة)`;
+          lateCount++;
+        } else {
+          timeStatus = ' (في الموعد)';
+          onTimeCount++;
+        }
+        takenCount++;
+        
+        report += `- ${med.name}: ${status} - الموعد المقرر: ${med.time} - تم التناول الساعة: ${actualTime.format('HH:mm')}${timeStatus}\n`;
+      } else {
+        report += `- ${med.name}: ${status} - الموعد المقرر: ${med.time}\n`;
+      }
+    }
+    
+    report += `\n--- إحصائيات اليوم ---\n`;
+    report += `إجمالي الأدوية: ${totalCount}\n`;
+    report += `تم التناول: ${takenCount}\n`;
+    report += `لم يتم التناول: ${totalCount - takenCount}\n`;
+    report += `في الموعد: ${onTimeCount}\n`;
+    report += `متقدم: ${earlyCount}\n`;
+    report += `متأخر: ${lateCount}\n`;
+    
+    return report;
+  } catch (error) {
+    console.error('Error generating daily report:', error);
+    return null;
   }
 }
 
@@ -572,6 +634,17 @@ app.put('/api/medications/reset-all', authenticateToken, async (req, res) => {
 
   try {
     const medications = await getAllMedications();
+    const chatIds = await getAllChatIds();
+    
+    // Generate daily report before reset
+    const report = await generateDailyReport();
+    
+    if (chatIds.length > 0 && report) {
+      const reportMessage = `${report}\n\nتم اعادة تعيين الادوية لليوم التالي`;
+      for (const chat of chatIds) {
+        await sendTelegramMessage(chat.chatId, reportMessage);
+      }
+    }
     
     if (medications.length === 0) {
       return res.json({ success: true, message: 'No medications to reset' });
@@ -872,7 +945,7 @@ app.post('/api/chat-ids', authenticateToken, async (req, res) => {
     const ref = await chatIdsRef.push(newChat);
     const chat = { ...newChat, id: ref.key, key: ref.key };
 
-    // Send welcome message with name
+    // Send welcome message with name (without duplicate website link)
     const userName = name || 'عزيزي المستخدم';
     const welcomeMessage = `مرحبا ${userName}\nتم اضافة رقمكم الى موقع "نظام تذكير الأدوية (لطيف)"\nللمتابعة برجاء زيارة الويب:\n${WEBSITE_URL}`;
     await sendTelegramMessage(chatId, welcomeMessage);
