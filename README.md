@@ -1,17 +1,37 @@
-# نظام تذكير الأدوية 💊
+# نظام إدارة وتذكير الأدوية
 
-نظام بسيط لإدارة وتذكير الأدوية مع إشعارات عبر Telegram.
+نظام ويب كامل لإدارة الأدوية وتذكير المرضى بمواعيد تناول الأدوية من خلال Telegram Bot.
 
 ## المميزات
-- ✅ إدارة الأدوية (إضافة، حذف، تعليم على التناول)
-- ✅ إشعارات Telegram للمرضى
-- ✅ دعم عدة مرضى (Chat IDs متعددة)
-- ✅ لوحة تحكم سهلة الاستخدام
-- ✅ حماية JWT
 
-## التنصيب
+- إدارة الأدوية (إضافة، تعديل، حذف، عرض)
+- إدارة المرضى (إضافة، حذف، عرض)
+- تذكير تلقائي عبر Telegram عند موعد الجرعة
+- إمكانية تأكيد تناول الدواء من خلال أزرار Inline في Telegram
+- لوحة تحكم متكاملة
+- دعم كامل للغة العربية (RTL)
+- تصميم متجاوب يعمل على جميع الأجهزة
+- توقيت مصر (Africa/Cairo)
 
-### 1. Clone المشروع
+## التقنيات المستخدمة
+
+- **Backend**: Node.js + Express
+- **Database**: Firebase Realtime Database
+- **Authentication**: JWT with Cookies
+- **Notifications**: Telegram Bot API
+- **Scheduler**: node-cron (يعمل كل دقيقة)
+
+## متطلبات التشغيل
+
+- Node.js 16+
+- حساب Firebase (Realtime Database)
+- حساب Telegram Bot Token
+- حساب Vercel (للنشر)
+
+## التثبيت والتشغيل
+
+### 1. استنساخ المشروع
+
 ```bash
-git clone <your-repo>
+git clone https://github.com/yourusername/medication-reminder.git
 cd medication-reminder
