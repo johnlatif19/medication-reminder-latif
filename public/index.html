@@ -3,251 +3,275 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>جدول الأدوية</title>
+    <title>نظام تذكير الأدوية</title>
     <style>
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
-        
+
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: #f0f2f5;
-            min-height: 100vh;
-        }
-        
-        .header {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
+            min-height: 100vh;
             padding: 20px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            color: #333;
         }
-        
-        .header-content {
+
+        .container {
             max-width: 1200px;
             margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            border-radius: 15px;
+            padding: 20px 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
             display: flex;
             justify-content: space-between;
             align-items: center;
             flex-wrap: wrap;
+            gap: 15px;
         }
-        
+
         .header h1 {
+            color: #4a4a4a;
             font-size: 24px;
         }
-        
-        .header .date {
-            font-size: 14px;
-            opacity: 0.9;
-        }
-        
-        .login-link {
-            color: white;
-            text-decoration: none;
-            padding: 8px 20px;
-            border: 2px solid white;
-            border-radius: 8px;
-            transition: all 0.3s;
-        }
-        
-        .login-link:hover {
-            background: white;
-            color: #667eea;
-        }
-        
-        .container {
-            max-width: 1200px;
-            margin: 20px auto;
-            padding: 0 20px;
-        }
-        
-        .filter-section {
-            background: white;
-            padding: 20px;
-            border-radius: 12px;
-            margin-bottom: 30px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+
+        .header-controls {
             display: flex;
             gap: 15px;
             align-items: center;
             flex-wrap: wrap;
         }
-        
-        .filter-section input {
-            padding: 10px 15px;
-            border: 2px solid #e0e0e0;
-            border-radius: 8px;
-            font-size: 14px;
-            flex: 1;
-            min-width: 150px;
-        }
-        
-        .filter-section input:focus {
-            outline: none;
-            border-color: #667eea;
-        }
-        
+
         .btn {
-            padding: 10px 25px;
+            padding: 10px 20px;
             border: none;
             border-radius: 8px;
             cursor: pointer;
             font-size: 14px;
-            transition: all 0.3s;
-            font-weight: 500;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
         }
-        
+
         .btn-primary {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: #667eea;
             color: white;
         }
-        
+
         .btn-primary:hover {
+            background: #5a67d8;
             transform: translateY(-2px);
             box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
         }
-        
-        .btn-secondary {
-            background: #6c757d;
+
+        .btn-success {
+            background: #48bb78;
             color: white;
         }
-        
-        .btn-secondary:hover {
-            background: #5a6268;
+
+        .btn-success:hover {
+            background: #38a169;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(72, 187, 120, 0.4);
         }
-        
+
+        .btn-danger {
+            background: #fc8181;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #f56565;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(252, 129, 129, 0.4);
+        }
+
+        .btn-warning {
+            background: #f6ad55;
+            color: white;
+        }
+
+        .btn-warning:hover {
+            background: #ed8936;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(246, 173, 85, 0.4);
+        }
+
+        .btn-outline {
+            background: transparent;
+            border: 2px solid #667eea;
+            color: #667eea;
+        }
+
+        .btn-outline:hover {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-dashboard {
+            background: #48bb78;
+            color: white;
+        }
+
+        .btn-dashboard:hover {
+            background: #38a169;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(72, 187, 120, 0.4);
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+
+        .stat-card .number {
+            font-size: 32px;
+            font-weight: bold;
+            color: #667eea;
+            margin: 10px 0;
+        }
+
+        .stat-card .label {
+            color: #888;
+            font-size: 14px;
+        }
+
+        .filter-section {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .filter-section input[type="date"] {
+            padding: 10px 15px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 14px;
+            font-family: inherit;
+        }
+
         .medications-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
             gap: 20px;
         }
-        
+
         .medication-card {
             background: white;
-            border-radius: 12px;
+            border-radius: 15px;
             padding: 20px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-            border-right: 4px solid #667eea;
-            transition: transform 0.3s;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            transition: all 0.3s ease;
+            position: relative;
         }
-        
+
         .medication-card:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+            transform: translateY(-5px);
+            box-shadow: 0 15px 40px rgba(0,0,0,0.15);
         }
-        
-        .medication-card.taken {
-            border-right-color: #28a745;
-            opacity: 0.7;
-        }
-        
-        .medication-card .med-name {
-            font-size: 20px;
+
+        .medication-card .name {
+            font-size: 18px;
             font-weight: bold;
-            color: #333;
+            color: #4a4a4a;
+            margin-bottom: 10px;
         }
-        
-        .medication-card .med-dosage {
-            color: #667eea;
-            font-size: 14px;
-            margin-top: 5px;
-        }
-        
-        .medication-card .med-time {
-            color: #666;
-            font-size: 14px;
-            margin-top: 5px;
-        }
-        
-        .medication-card .med-date {
+
+        .medication-card .time {
             color: #888;
-            font-size: 13px;
-            margin-top: 5px;
+            font-size: 14px;
+            margin-bottom: 10px;
         }
-        
-        .medication-card .med-notes {
-            color: #888;
-            font-size: 13px;
-            margin-top: 10px;
-            padding: 10px;
-            background: #f8f9fa;
-            border-radius: 6px;
-        }
-        
+
         .medication-card .status {
             display: inline-block;
             padding: 4px 12px;
             border-radius: 20px;
             font-size: 12px;
-            font-weight: 500;
-            margin-top: 10px;
+            font-weight: 600;
+            margin-bottom: 10px;
         }
-        
+
         .status-taken {
-            background: #d4edda;
-            color: #155724;
+            background: #c6f6d5;
+            color: #22543d;
         }
-        
+
         .status-pending {
-            background: #fff3cd;
-            color: #856404;
+            background: #fefcbf;
+            color: #744210;
         }
-        
-        .empty-state {
+
+        .medication-card .actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 15px;
+        }
+
+        .medication-card .actions .btn {
+            flex: 1;
+            min-width: 80px;
             text-align: center;
-            padding: 60px 20px;
-            color: #666;
-            grid-column: 1 / -1;
+            font-size: 12px;
+            padding: 8px 15px;
         }
-        
-        .empty-state .icon {
-            font-size: 64px;
-            margin-bottom: 20px;
-        }
-        
-        .stats {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 15px;
-            margin-bottom: 30px;
-        }
-        
-        .stat-card {
+
+        .no-data {
+            text-align: center;
+            padding: 50px 20px;
             background: white;
-            padding: 15px;
-            border-radius: 12px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-            text-align: center;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
         }
-        
-        .stat-card .number {
-            font-size: 28px;
-            font-weight: bold;
-            color: #667eea;
+
+        .no-data p {
+            color: #888;
+            font-size: 18px;
         }
-        
-        .stat-card .label {
-            color: #666;
-            font-size: 13px;
-            margin-top: 5px;
-        }
-        
-        @media (max-width: 600px) {
-            .header-content {
+
+        @media (max-width: 768px) {
+            .header {
                 flex-direction: column;
-                gap: 10px;
                 text-align: center;
             }
-            
+
+            .header-controls {
+                justify-content: center;
+            }
+
             .filter-section {
                 flex-direction: column;
             }
-            
-            .filter-section input {
+
+            .filter-section input[type="date"] {
                 width: 100%;
             }
-            
+
             .medications-grid {
                 grid-template-columns: 1fr;
             }
@@ -255,150 +279,162 @@
     </style>
 </head>
 <body>
-    <div class="header">
-        <div class="header-content">
-            <div>
-                <h1>جدول الأدوية</h1>
-                <div class="date" id="currentDate"></div>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>نظام تذكير الأدوية</h1>
+            <div class="header-controls">
+                <a href="/dashboard" class="btn btn-dashboard">لوحة التحكم</a>
             </div>
         </div>
-    </div>
 
-    <div class="container">
-        <div class="stats">
+        <!-- Stats -->
+        <div class="stats" id="stats">
             <div class="stat-card">
-                <div class="number" id="totalCount">0</div>
+                <div class="number" id="totalMeds">0</div>
                 <div class="label">إجمالي الأدوية</div>
             </div>
             <div class="stat-card">
-                <div class="number" id="takenCount">0</div>
-                <div class="label">تم تناولها</div>
+                <div class="number" id="takenMeds">0</div>
+                <div class="label">تم التناول</div>
             </div>
             <div class="stat-card">
-                <div class="number" id="pendingCount">0</div>
-                <div class="label">متبقية</div>
+                <div class="number" id="pendingMeds">0</div>
+                <div class="label">في الانتظار</div>
             </div>
         </div>
 
+        <!-- Filter -->
         <div class="filter-section">
+            <label for="filterDate">تصفية بالتاريخ:</label>
             <input type="date" id="filterDate">
             <button class="btn btn-primary" onclick="applyFilter()">تصفية</button>
-            <button class="btn btn-secondary" onclick="resetFilter()">عرض الكل</button>
+            <button class="btn btn-outline" onclick="clearFilter()">إلغاء التصفية</button>
         </div>
 
-        <div class="medications-grid" id="medicationsGrid"></div>
+        <!-- Medications Grid -->
+        <div class="medications-grid" id="medicationsGrid">
+            <!-- Medications will be loaded here -->
+        </div>
     </div>
 
     <script>
+        // Global state
         let allMedications = [];
-        let currentDate = new Date().toISOString().split('T')[0];
-        
-        // Set current date
-        document.getElementById('currentDate').textContent = new Date().toLocaleDateString('ar', {
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric',
-            weekday: 'long'
-        });
-        
-        // Set default filter date to today
-        document.getElementById('filterDate').value = currentDate;
-        
+        let currentFilter = null;
+
         // Load medications
         async function loadMedications() {
             try {
                 const response = await fetch('/api/medications');
-                const data = await response.json();
-                allMedications = data;
-                renderMedications(allMedications);
-                updateStats(allMedications);
+                const medications = await response.json();
+                allMedications = medications;
+                renderMedications(medications);
+                updateStats(medications);
             } catch (error) {
                 console.error('Error loading medications:', error);
                 document.getElementById('medicationsGrid').innerHTML = `
-                    <div class="empty-state">
-                        <h3>حدث خطأ في تحميل البيانات</h3>
-                        <p>يرجى المحاولة مرة أخرى</p>
+                    <div class="no-data">
+                        <p>حدث خطأ في تحميل الأدوية</p>
                     </div>
                 `;
             }
         }
-        
+
+        // Render medications
         function renderMedications(medications) {
             const grid = document.getElementById('medicationsGrid');
-            
+
             if (!medications || medications.length === 0) {
                 grid.innerHTML = `
-                    <div class="empty-state">
-                        <h3>لا توجد أدوية</h3>
-                        <p>سيتم عرض الأدوية هنا عند إضافتها</p>
+                    <div class="no-data">
+                        <p>لا توجد أدوية</p>
                     </div>
                 `;
                 return;
             }
-            
+
             grid.innerHTML = medications.map(med => `
-                <div class="medication-card ${med.taken ? 'taken' : ''}">
-                    <div class="med-name">${med.name}</div>
-                    <div class="med-dosage"> ${med.dosage}</div>
-                    <div class="med-time"> ${med.time || 'غير محدد'}</div>
-                    <div class="med-date"> ${med.date || 'غير محدد'}</div>
-                    ${med.notes ? `<div class="med-notes"> ${med.notes}</div>` : ''}
-                    <div>
-                        <span class="status ${med.taken ? 'status-taken' : 'status-pending'}">
-                            ${med.taken ? ' تم التناول' : ' في الانتظار'}
-                        </span>
+                <div class="medication-card">
+                    <div class="name">${med.name}</div>
+                    <div class="time">⏰ ${med.time}</div>
+                    <div class="status ${med.taken ? 'status-taken' : 'status-pending'}">
+                        ${med.taken ? 'تم التناول' : 'في الانتظار'}
+                    </div>
+                    ${med.lastTaken ? `<div style="font-size: 12px; color: #888; margin-bottom: 10px;">آخر تناول: ${new Date(med.lastTaken).toLocaleString('ar-EG')}</div>` : ''}
+                    <div class="actions">
+                        <button class="btn btn-success" onclick="markAsTaken('${med.id}')" ${med.taken ? 'disabled' : ''}>
+                            تم التناول
+                        </button>
                     </div>
                 </div>
             `).join('');
         }
-        
+
+        // Update statistics
         function updateStats(medications) {
             const total = medications.length;
             const taken = medications.filter(m => m.taken).length;
             const pending = total - taken;
-            
-            document.getElementById('totalCount').textContent = total;
-            document.getElementById('takenCount').textContent = taken;
-            document.getElementById('pendingCount').textContent = pending;
+
+            document.getElementById('totalMeds').textContent = total;
+            document.getElementById('takenMeds').textContent = taken;
+            document.getElementById('pendingMeds').textContent = pending;
         }
-        
-        async function applyFilter() {
+
+        // Apply filter
+        function applyFilter() {
             const date = document.getElementById('filterDate').value;
-            
             if (!date) {
-                renderMedications(allMedications);
-                updateStats(allMedications);
+                alert('الرجاء اختيار تاريخ');
                 return;
             }
-            
-            try {
-                const response = await fetch('/api/medications/filter', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ date })
-                });
-                
-                const data = await response.json();
-                renderMedications(data);
-                updateStats(data);
-            } catch (error) {
-                console.error('Error filtering:', error);
-            }
+
+            // For now, we just display all medications with filter info
+            // In a real implementation, you would filter based on date
+            renderMedications(allMedications);
+            currentFilter = date;
         }
-        
-        function resetFilter() {
+
+        // Clear filter
+        function clearFilter() {
             document.getElementById('filterDate').value = '';
             renderMedications(allMedications);
-            updateStats(allMedications);
+            currentFilter = null;
         }
-        
-        // Auto refresh every 3 seconds
-        setInterval(loadMedications, 3000);
-        
-        // Load on page load
-        loadMedications();
+
+        // Mark medication as taken (public view - no auth required)
+        async function markAsTaken(id) {
+            if (!confirm('هل أنت متأكد من أنك تناولت هذا الدواء؟')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/medications/${id}/take`, {
+                    method: 'PUT'
+                });
+
+                if (response.ok) {
+                    alert('تم تسجيل تناول الدواء بنجاح');
+                    loadMedications();
+                } else {
+                    const error = await response.json();
+                    alert(`خطأ: ${error.error || 'حدث خطأ'}`);
+                }
+            } catch (error) {
+                console.error('Error marking as taken:', error);
+                alert('حدث خطأ في تسجيل التناول');
+            }
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            loadMedications();
+
+            // Set default date to today
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('filterDate').value = today;
+        });
     </script>
 </body>
 </html>
