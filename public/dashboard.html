@@ -84,6 +84,13 @@
             box-shadow: 0 5px 15px rgba(72, 187, 120, 0.4);
         }
 
+        .btn-success:disabled {
+            background: #a0aec0;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
         .btn-danger {
             background: #fc8181;
             color: white;
@@ -120,17 +127,6 @@
         .btn-sm {
             padding: 6px 12px;
             font-size: 12px;
-        }
-
-        .btn-danger-outline {
-            background: transparent;
-            border: 2px solid #fc8181;
-            color: #fc8181;
-        }
-
-        .btn-danger-outline:hover {
-            background: #fc8181;
-            color: white;
         }
 
         .btn-edit {
@@ -711,24 +707,18 @@
             }
 
             try {
-                // Get all medications
-                const response = await fetch('/api/medications', {
+                const response = await fetch('/api/medications/reset-all', {
+                    method: 'PUT',
                     credentials: 'include'
                 });
-                const medications = await response.json();
 
-                // Reset each medication
-                for (const med of medications) {
-                    if (med.taken) {
-                        await fetch(`/api/medications/${med.id}/reset`, {
-                            method: 'PUT',
-                            credentials: 'include'
-                        });
-                    }
+                if (response.ok) {
+                    alert('تم إعادة تعيين حالة التناول لجميع الأدوية بنجاح');
+                    loadMedications();
+                } else {
+                    const error = await response.json();
+                    alert(`خطأ: ${error.error || 'حدث خطأ'}`);
                 }
-
-                alert('تم إعادة تعيين حالة التناول لجميع الأدوية بنجاح');
-                loadMedications();
             } catch (error) {
                 console.error('Error resetting medications:', error);
                 alert('حدث خطأ في إعادة تعيين حالة التناول');
@@ -946,7 +936,6 @@
             document.getElementById('modalSubmit').textContent = 'إضافة';
             document.getElementById('modal').classList.add('show');
 
-            // Override form submit for patient
             document.getElementById('modalForm').onsubmit = async (e) => {
                 e.preventDefault();
 
@@ -1011,7 +1000,6 @@
             document.getElementById('modalSubmit').textContent = 'تحديث';
             document.getElementById('modal').classList.add('show');
 
-            // Override form submit for patient update
             document.getElementById('modalForm').onsubmit = async (e) => {
                 e.preventDefault();
 
@@ -1177,7 +1165,6 @@
                 if (response.ok) {
                     const data = await response.json();
 
-                    // Check if data has the expected structure
                     let webhookStatus = 'غير نشط';
                     let statusClass = 'inactive';
                     let webhookUrl = 'غير محدد';
@@ -1219,26 +1206,21 @@
 
         // ==================== INITIALIZATION ====================
 
-        // Load all data
         function loadAllData() {
             loadMedications();
             loadPatients();
         }
 
-        // Initialize
         document.addEventListener('DOMContentLoaded', () => {
             checkAuth();
             loadAllData();
 
-            // Set default date
             const today = new Date().toISOString().split('T')[0];
             document.getElementById('filterDate').value = today;
 
-            // Load webhook info after a delay
             setTimeout(() => getWebhookInfo(), 1000);
         });
 
-        // Close modal on outside click
         document.getElementById('modal').addEventListener('click', (e) => {
             if (e.target === document.getElementById('modal')) {
                 closeModal();
