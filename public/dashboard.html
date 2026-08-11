@@ -133,6 +133,17 @@
             color: white;
         }
 
+        .btn-edit {
+            background: #4299e1;
+            color: white;
+        }
+
+        .btn-edit:hover {
+            background: #3182ce;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(66, 153, 225, 0.4);
+        }
+
         .tabs {
             display: flex;
             gap: 10px;
@@ -262,6 +273,16 @@
             margin: 5px 0;
         }
 
+        .item-card .status-active {
+            background: #c6f6d5;
+            color: #22543d;
+        }
+
+        .item-card .status-inactive {
+            background: #fed7d7;
+            color: #742a2a;
+        }
+
         .item-card .actions {
             display: flex;
             gap: 10px;
@@ -346,62 +367,6 @@
 
         .modal-actions .btn {
             flex: 1;
-        }
-
-        .webhook-status {
-            display: inline-block;
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 600;
-        }
-
-        .webhook-status.active {
-            background: #c6f6d5;
-            color: #22543d;
-        }
-
-        .webhook-status.inactive {
-            background: #fed7d7;
-            color: #742a2a;
-        }
-
-        .settings-group {
-            margin-bottom: 25px;
-            padding-bottom: 20px;
-            border-bottom: 1px solid #e2e8f0;
-        }
-
-        .settings-group:last-child {
-            border-bottom: none;
-        }
-
-        .settings-group label {
-            display: block;
-            margin-bottom: 8px;
-            font-weight: 600;
-            color: #4a4a4a;
-        }
-
-        .settings-group input {
-            width: 100%;
-            padding: 10px 15px;
-            border: 2px solid #e2e8f0;
-            border-radius: 8px;
-            font-size: 14px;
-            font-family: inherit;
-            margin-bottom: 10px;
-        }
-
-        .settings-group input:focus {
-            outline: none;
-            border-color: #667eea;
-        }
-
-        .settings-group .info-text {
-            color: #888;
-            font-size: 13px;
-            margin-top: 5px;
         }
 
         .filter-section {
@@ -517,23 +482,26 @@
                     <h2>إعدادات النظام</h2>
                 </div>
 
-                <div class="settings-group">
-                    <h3>Telegram Webhook</h3>
-                    <label for="webhookUrl">Webhook URL</label>
-                    <input type="url" id="webhookUrl" placeholder="https://your-app.vercel.app/api/webhook/telegram">
-                    <div class="info-text">عنوان URL الذي سيرسل إليه Telegram الإشعارات</div>
-                    <div style="margin-top: 10px; display: flex; gap: 10px; flex-wrap: wrap;">
+                <div class="settings-group" style="margin-bottom: 25px; padding-bottom: 20px; border-bottom: 1px solid #e2e8f0;">
+                    <h3>اختبار Telegram</h3>
+                    <div class="form-group" style="margin-bottom: 15px;">
+                        <label for="testTelegramId">معرف Telegram (Chat ID)</label>
+                        <input type="text" id="testTelegramId" placeholder="أدخل معرف Telegram" style="width: 100%; padding: 10px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; font-family: inherit;">
+                    </div>
+                    <button class="btn btn-primary" onclick="testTelegram()">إرسال رسالة اختبارية</button>
+                </div>
+
+                <div class="settings-group" style="margin-bottom: 25px; padding-bottom: 20px; border-bottom: 1px solid #e2e8f0;">
+                    <h3>إعدادات Webhook</h3>
+                    <div class="form-group" style="margin-bottom: 15px;">
+                        <label for="webhookUrl">Webhook URL</label>
+                        <input type="url" id="webhookUrl" placeholder="https://your-app.vercel.app/api/webhook/telegram" style="width: 100%; padding: 10px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; font-family: inherit;">
+                    </div>
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
                         <button class="btn btn-primary btn-sm" onclick="setWebhook()">تعيين Webhook</button>
                         <button class="btn btn-warning btn-sm" onclick="getWebhookInfo()">عرض حالة Webhook</button>
                     </div>
                     <div id="webhookInfo" style="margin-top: 15px;"></div>
-                </div>
-
-                <div class="settings-group">
-                    <h3>اختبار Telegram</h3>
-                    <label for="testTelegramId">معرف Telegram (Chat ID)</label>
-                    <input type="text" id="testTelegramId" placeholder="أدخل معرف Telegram">
-                    <button class="btn btn-primary btn-sm" onclick="testTelegram()">إرسال رسالة اختبارية</button>
                 </div>
             </div>
         </div>
@@ -572,11 +540,11 @@
                 const data = await response.json();
 
                 if (!data.authenticated) {
-                    window.location.href = '/login.html';
+                    window.location.href = '/login';
                 }
             } catch (error) {
                 console.error('Auth check error:', error);
-                window.location.href = '/login.html';
+                window.location.href = '/login';
             }
         }
 
@@ -589,7 +557,7 @@
                     method: 'POST',
                     credentials: 'include'
                 });
-                window.location.href = '/login.html';
+                window.location.href = '/login';
             } catch (error) {
                 console.error('Logout error:', error);
             }
@@ -639,22 +607,41 @@
                 return;
             }
 
-            grid.innerHTML = medications.map(med => `
-                <div class="item-card">
-                    <div class="name">${med.name}</div>
-                    <div class="detail">⏰ ${med.time}</div>
-                    <div class="status ${med.taken ? 'status-taken' : 'status-pending'}">
-                        ${med.taken ? 'تم التناول' : 'في الانتظار'}
+            grid.innerHTML = medications.map(med => {
+                const isTakenToday = med.taken;
+                const takenTime = med.lastTaken ? new Date(med.lastTaken) : null;
+                const expectedTime = med.time;
+                
+                let takenInfo = '';
+                if (isTakenToday && takenTime) {
+                    const timeStr = takenTime.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+                    takenInfo = `
+                        <div style="font-size: 12px; color: #4a5568; background: #f7fafc; padding: 8px 12px; border-radius: 8px; margin-top: 8px; margin-bottom: 8px; border-right: 3px solid #48bb78;">
+                            <span style="font-weight: 600;">تم التناول:</span> الساعة ${timeStr}
+                            <br>
+                            <span style="font-weight: 600;">الموعد المقرر:</span> الساعة ${expectedTime}
+                        </div>
+                    `;
+                }
+
+                return `
+                    <div class="item-card">
+                        <div class="name">${med.name}</div>
+                        <div class="detail">الموعد المقرر: ${med.time}</div>
+                        <div class="status ${isTakenToday ? 'status-active' : 'status-inactive'}">
+                            ${isTakenToday ? 'تم التناول اليوم' : 'في الانتظار'}
+                        </div>
+                        ${takenInfo}
+                        <div class="actions">
+                            <button class="btn btn-success btn-sm" onclick="markAsTaken('${med.id}')" ${isTakenToday ? 'disabled' : ''}>
+                                تم التناول
+                            </button>
+                            <button class="btn btn-edit btn-sm" onclick="editMedication('${med.id}')">تعديل</button>
+                            <button class="btn btn-danger btn-sm" onclick="deleteMedication('${med.id}')">حذف</button>
+                        </div>
                     </div>
-                    ${med.lastTaken ? `<div class="detail">آخر تناول: ${new Date(med.lastTaken).toLocaleString('ar-EG')}</div>` : ''}
-                    <div class="actions">
-                        <button class="btn btn-success btn-sm" onclick="markAsTaken('${med.id}')" ${med.taken ? 'disabled' : ''}>
-                            تم التناول
-                        </button>
-                        <button class="btn btn-danger btn-sm" onclick="deleteMedication('${med.id}')">حذف</button>
-                    </div>
-                </div>
-            `).join('');
+                `;
+            }).join('');
         }
 
         // Update medication stats
@@ -676,7 +663,6 @@
                 return;
             }
 
-            // For now, just show all medications
             renderMedications(allMedications);
             currentFilter = date;
         }
@@ -734,6 +720,31 @@
             }
         }
 
+        // Edit medication
+        async function editMedication(id) {
+            const medication = allMedications.find(m => m.id === id);
+            if (!medication) {
+                alert('الدواء غير موجود');
+                return;
+            }
+
+            modalMode = 'edit';
+            editId = id;
+            document.getElementById('modalTitle').textContent = 'تعديل دواء';
+            document.getElementById('modalFields').innerHTML = `
+                <div class="form-group">
+                    <label for="medName">اسم الدواء</label>
+                    <input type="text" id="medName" value="${medication.name}" required>
+                </div>
+                <div class="form-group">
+                    <label for="medTime">وقت الجرعة</label>
+                    <input type="time" id="medTime" value="${medication.time}" required>
+                </div>
+            `;
+            document.getElementById('modalSubmit').textContent = 'تحديث';
+            document.getElementById('modal').classList.add('show');
+        }
+
         // Add medication modal
         function addMedication() {
             modalMode = 'add';
@@ -753,32 +764,13 @@
             document.getElementById('modal').classList.add('show');
         }
 
-        // Edit medication modal
-        function editMedication(medication) {
-            modalMode = 'edit';
-            editId = medication.id;
-            document.getElementById('modalTitle').textContent = 'تعديل دواء';
-            document.getElementById('modalFields').innerHTML = `
-                <div class="form-group">
-                    <label for="medName">اسم الدواء</label>
-                    <input type="text" id="medName" value="${medication.name}" required>
-                </div>
-                <div class="form-group">
-                    <label for="medTime">وقت الجرعة</label>
-                    <input type="time" id="medTime" value="${medication.time}" required>
-                </div>
-            `;
-            document.getElementById('modalSubmit').textContent = 'تحديث';
-            document.getElementById('modal').classList.add('show');
-        }
-
         // Close modal
         function closeModal() {
             document.getElementById('modal').classList.remove('show');
             document.getElementById('modalForm').reset();
         }
 
-        // Handle form submission
+        // Handle form submission for medications
         document.getElementById('modalForm').addEventListener('submit', async (e) => {
             e.preventDefault();
 
@@ -800,7 +792,6 @@
                         credentials: 'include'
                     });
                 } else {
-                    // Edit mode - update medication
                     response = await fetch(`/api/medications/${editId}`, {
                         method: 'PUT',
                         headers: { 'Content-Type': 'application/json' },
@@ -855,12 +846,15 @@
             grid.innerHTML = patients.map(patient => `
                 <div class="item-card">
                     <div class="name">${patient.name}</div>
-                    <div class="detail">${patient.telegramId ? `Telegram ID: ${patient.telegramId}` : 'غير مرتبط مع Telegram'}</div>
-                    <div class="detail">الحالة: ${patient.isActive !== false ? 'نشط' : 'غير نشط'}</div>
+                    <div class="detail">${patient.telegramId ? `معرف Telegram: ${patient.telegramId}` : 'غير مرتبط مع Telegram'}</div>
+                    <div class="status ${patient.isActive !== false ? 'status-active' : 'status-inactive'}">
+                        ${patient.isActive !== false ? 'نشط' : 'غير نشط'}
+                    </div>
                     <div class="actions">
                         <button class="btn btn-warning btn-sm" onclick="testTelegramPatient('${patient.telegramId}')" ${!patient.telegramId ? 'disabled' : ''}>
                             اختبار
                         </button>
+                        <button class="btn btn-edit btn-sm" onclick="editPatient('${patient.id}')">تعديل</button>
                         <button class="btn btn-danger btn-sm" onclick="deletePatient('${patient.id}')">حذف</button>
                     </div>
                 </div>
@@ -880,6 +874,13 @@
                     <input type="text" id="patientTelegramId" placeholder="أدخل معرف Telegram">
                     <div style="font-size: 12px; color: #888; margin-top: 5px;">اترك فارغاً لإضافة المريض بدون Telegram</div>
                 </div>
+                <div class="form-group">
+                    <label for="patientActive">الحالة</label>
+                    <select id="patientActive">
+                        <option value="true">نشط</option>
+                        <option value="false">غير نشط</option>
+                    </select>
+                </div>
             `;
             document.getElementById('modalSubmit').textContent = 'إضافة';
             document.getElementById('modal').classList.add('show');
@@ -890,6 +891,7 @@
 
                 const name = document.getElementById('patientName').value.trim();
                 const telegramId = document.getElementById('patientTelegramId').value.trim();
+                const isActive = document.getElementById('patientActive').value === 'true';
 
                 if (!name) {
                     alert('الرجاء إدخال اسم المريض');
@@ -900,7 +902,7 @@
                     const response = await fetch('/api/patients', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ name, telegramId: telegramId || null }),
+                        body: JSON.stringify({ name, telegramId: telegramId || null, isActive }),
                         credentials: 'include'
                     });
 
@@ -915,6 +917,71 @@
                 } catch (error) {
                     console.error('Error adding patient:', error);
                     alert('حدث خطأ في إضافة المريض');
+                }
+            };
+        }
+
+        // Edit patient
+        async function editPatient(id) {
+            const patient = allPatients.find(p => p.id === id);
+            if (!patient) {
+                alert('المريض غير موجود');
+                return;
+            }
+
+            document.getElementById('modalTitle').textContent = 'تعديل مريض';
+            document.getElementById('modalFields').innerHTML = `
+                <div class="form-group">
+                    <label for="patientName">اسم المريض</label>
+                    <input type="text" id="patientName" value="${patient.name}" required>
+                </div>
+                <div class="form-group">
+                    <label for="patientTelegramId">معرف Telegram</label>
+                    <input type="text" id="patientTelegramId" value="${patient.telegramId || ''}" placeholder="أدخل معرف Telegram">
+                </div>
+                <div class="form-group">
+                    <label for="patientActive">الحالة</label>
+                    <select id="patientActive">
+                        <option value="true" ${patient.isActive !== false ? 'selected' : ''}>نشط</option>
+                        <option value="false" ${patient.isActive === false ? 'selected' : ''}>غير نشط</option>
+                    </select>
+                </div>
+            `;
+            document.getElementById('modalSubmit').textContent = 'تحديث';
+            document.getElementById('modal').classList.add('show');
+
+            // Override form submit for patient update
+            document.getElementById('modalForm').onsubmit = async (e) => {
+                e.preventDefault();
+
+                const name = document.getElementById('patientName').value.trim();
+                const telegramId = document.getElementById('patientTelegramId').value.trim();
+                const isActive = document.getElementById('patientActive').value === 'true';
+
+                if (!name) {
+                    alert('الرجاء إدخال اسم المريض');
+                    return;
+                }
+
+                try {
+                    const response = await fetch(`/api/patients/${id}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ name, telegramId: telegramId || null, isActive }),
+                        credentials: 'include'
+                    });
+
+                    if (response.ok) {
+                        alert('تم تحديث المريض بنجاح');
+                        closeModal();
+                        loadPatients();
+                    } else {
+                        const error = await response.json();
+                        alert(`خطأ: ${error.error || 'حدث خطأ'}`);
+                    }
+                } catch (error) {
+                    console.error('Error updating patient:', error);
+                    alert('حدث خطأ في تحديث المريض');
                 }
             };
         }
@@ -971,6 +1038,35 @@
 
         // ==================== SETTINGS ====================
 
+        // Test Telegram
+        async function testTelegram() {
+            const telegramId = document.getElementById('testTelegramId').value.trim();
+
+            if (!telegramId) {
+                alert('الرجاء إدخال معرف Telegram');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/telegram/test', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ telegramId }),
+                    credentials: 'include'
+                });
+
+                if (response.ok) {
+                    alert('تم إرسال رسالة الاختبار بنجاح');
+                } else {
+                    const error = await response.json();
+                    alert(`خطأ: ${error.error || 'حدث خطأ'}`);
+                }
+            } catch (error) {
+                console.error('Error testing Telegram:', error);
+                alert('حدث خطأ في إرسال رسالة الاختبار');
+            }
+        }
+
         // Set webhook
         async function setWebhook() {
             const url = document.getElementById('webhookUrl').value.trim();
@@ -1021,10 +1117,10 @@
 
                     infoDiv.innerHTML = `
                         <div style="background: #f7fafc; padding: 15px; border-radius: 10px;">
-                            <p><strong>الحالة:</strong> <span class="webhook-status ${data.ok ? 'active' : 'inactive'}">${data.ok ? 'نشط' : 'غير نشط'}</span></p>
+                            <p><strong>الحالة:</strong> <span class="status ${data.ok ? 'status-active' : 'status-inactive'}">${data.ok ? 'نشط' : 'غير نشط'}</span></p>
                             <p><strong>URL:</strong> ${data.url || 'غير محدد'}</p>
                             ${data.last_error_message ? `<p><strong>آخر خطأ:</strong> ${data.last_error_message}</p>` : ''}
-                            <p><strong>عدد الطلبات:</strong> ${data.pending_update_count || 0}</p>
+                            <p><strong>عدد الطلبات المعلقة:</strong> ${data.pending_update_count || 0}</p>
                         </div>
                     `;
                 } else {
@@ -1034,35 +1130,6 @@
             } catch (error) {
                 console.error('Error getting webhook info:', error);
                 infoDiv.innerHTML = `<div style="color: #fc8181;">حدث خطأ في جلب معلومات Webhook</div>`;
-            }
-        }
-
-        // Test Telegram
-        async function testTelegram() {
-            const telegramId = document.getElementById('testTelegramId').value.trim();
-
-            if (!telegramId) {
-                alert('الرجاء إدخال معرف Telegram');
-                return;
-            }
-
-            try {
-                const response = await fetch('/api/telegram/test', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ telegramId }),
-                    credentials: 'include'
-                });
-
-                if (response.ok) {
-                    alert('تم إرسال رسالة الاختبار بنجاح');
-                } else {
-                    const error = await response.json();
-                    alert(`خطأ: ${error.error || 'حدث خطأ'}`);
-                }
-            } catch (error) {
-                console.error('Error testing Telegram:', error);
-                alert('حدث خطأ في إرسال رسالة الاختبار');
             }
         }
 
