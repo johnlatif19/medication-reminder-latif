@@ -554,6 +554,40 @@ app.post('/api/medications', authenticateToken, async (req, res) => {
   }
 });
 
+// Update medication
+app.put('/api/medications/:id', authenticateToken, async (req, res) => {
+  if (!firebaseInitialized) {
+    return res.status(500).json({ error: 'Firebase not initialized' });
+  }
+
+  try {
+    const { id } = req.params;
+    const { name, time } = req.body;
+
+    if (!name || !time) {
+      return res.status(400).json({ error: 'Name and time are required' });
+    }
+
+    const medication = await getMedicationById(id);
+
+    if (!medication) {
+      return res.status(404).json({ error: 'Medication not found' });
+    }
+
+    const medRef = db.ref(`medications/${medication.key}`);
+    await medRef.update({
+      name,
+      time,
+      updatedAt: new Date().toISOString()
+    });
+
+    const updatedMedication = await getMedicationById(id);
+    res.json(updatedMedication);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Mark medication as taken
 app.put('/api/medications/:id/take', authenticateToken, async (req, res) => {
   if (!firebaseInitialized) {
@@ -635,7 +669,7 @@ app.post('/api/patients', authenticateToken, async (req, res) => {
   }
 
   try {
-    const { name, telegramId } = req.body;
+    const { name, telegramId, isActive } = req.body;
 
     if (!name) {
       return res.status(400).json({ error: 'Name is required' });
@@ -645,7 +679,7 @@ app.post('/api/patients', authenticateToken, async (req, res) => {
     const newPatient = {
       name,
       telegramId: telegramId || null,
-      isActive: true,
+      isActive: isActive !== undefined ? isActive : true,
       id: `patient_${Date.now()}`,
       createdAt: new Date().toISOString()
     };
@@ -654,6 +688,41 @@ app.post('/api/patients', authenticateToken, async (req, res) => {
     const patient = { ...newPatient, key: ref.key };
 
     res.status(201).json(patient);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update patient
+app.put('/api/patients/:id', authenticateToken, async (req, res) => {
+  if (!firebaseInitialized) {
+    return res.status(500).json({ error: 'Firebase not initialized' });
+  }
+
+  try {
+    const { id } = req.params;
+    const { name, telegramId, isActive } = req.body;
+
+    if (!name) {
+      return res.status(400).json({ error: 'Name is required' });
+    }
+
+    const patient = await getPatientById(id);
+
+    if (!patient) {
+      return res.status(404).json({ error: 'Patient not found' });
+    }
+
+    const patientRef = db.ref(`patients/${patient.key}`);
+    await patientRef.update({
+      name,
+      telegramId: telegramId || null,
+      isActive: isActive !== undefined ? isActive : true,
+      updatedAt: new Date().toISOString()
+    });
+
+    const updatedPatient = await getPatientById(id);
+    res.json(updatedPatient);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
