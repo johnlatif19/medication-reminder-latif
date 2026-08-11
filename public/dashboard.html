@@ -144,6 +144,17 @@
             box-shadow: 0 5px 15px rgba(66, 153, 225, 0.4);
         }
 
+        .btn-reset {
+            background: #ed64a6;
+            color: white;
+        }
+
+        .btn-reset:hover {
+            background: #d53f8c;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(237, 100, 166, 0.4);
+        }
+
         .tabs {
             display: flex;
             gap: 10px;
@@ -391,6 +402,24 @@
             color: #888;
         }
 
+        .webhook-status {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .webhook-status.active {
+            background: #c6f6d5;
+            color: #22543d;
+        }
+
+        .webhook-status.inactive {
+            background: #fed7d7;
+            color: #742a2a;
+        }
+
         @media (max-width: 768px) {
             .header {
                 flex-direction: column;
@@ -457,6 +486,7 @@
                 <input type="date" id="filterDate">
                 <button class="btn btn-primary btn-sm" onclick="applyFilter()">تصفية</button>
                 <button class="btn btn-outline btn-sm" onclick="clearFilter()">إلغاء التصفية</button>
+                <button class="btn btn-reset btn-sm" onclick="resetTakenStatus()">إعادة تعيين حالة التناول</button>
                 <button class="btn btn-success btn-sm" onclick="addMedication()">إضافة دواء</button>
             </div>
 
@@ -672,6 +702,37 @@
             document.getElementById('filterDate').value = '';
             renderMedications(allMedications);
             currentFilter = null;
+        }
+
+        // Reset taken status for all medications
+        async function resetTakenStatus() {
+            if (!confirm('هل أنت متأكد من إعادة تعيين حالة التناول لجميع الأدوية؟ ستتم إعادة تعيين جميع الأدوية إلى حالة "في الانتظار".')) {
+                return;
+            }
+
+            try {
+                // Get all medications
+                const response = await fetch('/api/medications', {
+                    credentials: 'include'
+                });
+                const medications = await response.json();
+
+                // Reset each medication
+                for (const med of medications) {
+                    if (med.taken) {
+                        await fetch(`/api/medications/${med.id}/reset`, {
+                            method: 'PUT',
+                            credentials: 'include'
+                        });
+                    }
+                }
+
+                alert('تم إعادة تعيين حالة التناول لجميع الأدوية بنجاح');
+                loadMedications();
+            } catch (error) {
+                console.error('Error resetting medications:', error);
+                alert('حدث خطأ في إعادة تعيين حالة التناول');
+            }
         }
 
         // Mark medication as taken
@@ -1106,6 +1167,7 @@
         // Get webhook info
         async function getWebhookInfo() {
             const infoDiv = document.getElementById('webhookInfo');
+            infoDiv.innerHTML = 'جاري تحميل معلومات Webhook...';
 
             try {
                 const response = await fetch('/api/telegram/webhook-info', {
@@ -1115,21 +1177,43 @@
                 if (response.ok) {
                     const data = await response.json();
 
+                    // Check if data has the expected structure
+                    let webhookStatus = 'غير نشط';
+                    let statusClass = 'inactive';
+                    let webhookUrl = 'غير محدد';
+                    let pendingUpdates = 0;
+                    let lastError = '';
+
+                    if (data && typeof data === 'object') {
+                        webhookStatus = data.ok ? 'نشط' : 'غير نشط';
+                        statusClass = data.ok ? 'active' : 'inactive';
+                        webhookUrl = data.url || 'غير محدد';
+                        pendingUpdates = data.pending_update_count || 0;
+                        lastError = data.last_error_message || '';
+                    }
+
                     infoDiv.innerHTML = `
-                        <div style="background: #f7fafc; padding: 15px; border-radius: 10px;">
-                            <p><strong>الحالة:</strong> <span class="status ${data.ok ? 'status-active' : 'status-inactive'}">${data.ok ? 'نشط' : 'غير نشط'}</span></p>
-                            <p><strong>URL:</strong> ${data.url || 'غير محدد'}</p>
-                            ${data.last_error_message ? `<p><strong>آخر خطأ:</strong> ${data.last_error_message}</p>` : ''}
-                            <p><strong>عدد الطلبات المعلقة:</strong> ${data.pending_update_count || 0}</p>
+                        <div style="background: #f7fafc; padding: 15px; border-radius: 10px; margin-top: 10px;">
+                            <p><strong>الحالة:</strong> <span class="webhook-status ${statusClass}">${webhookStatus}</span></p>
+                            <p><strong>URL:</strong> ${webhookUrl}</p>
+                            ${lastError ? `<p><strong>آخر خطأ:</strong> ${lastError}</p>` : ''}
+                            <p><strong>عدد الطلبات المعلقة:</strong> ${pendingUpdates}</p>
+                            <p style="font-size: 12px; color: #888; margin-top: 10px;">تم تحديث: ${new Date().toLocaleString('ar-EG')}</p>
                         </div>
                     `;
                 } else {
                     const error = await response.json();
-                    infoDiv.innerHTML = `<div style="color: #fc8181;">خطأ: ${error.error || 'حدث خطأ'}</div>`;
+                    infoDiv.innerHTML = `<div style="color: #fc8181; padding: 10px; background: #fed7d7; border-radius: 8px;">خطأ: ${error.error || 'حدث خطأ في جلب معلومات Webhook'}</div>`;
                 }
             } catch (error) {
                 console.error('Error getting webhook info:', error);
-                infoDiv.innerHTML = `<div style="color: #fc8181;">حدث خطأ في جلب معلومات Webhook</div>`;
+                infoDiv.innerHTML = `
+                    <div style="color: #fc8181; padding: 10px; background: #fed7d7; border-radius: 8px; margin-top: 10px;">
+                        <strong>حدث خطأ:</strong> ${error.message || 'حدث خطأ في جلب معلومات Webhook'}
+                        <br>
+                        <span style="font-size: 12px;">تأكد من أن TELEGRAM_BOT_TOKEN صحيح وأن الخادم يعمل</span>
+                    </div>
+                `;
             }
         }
 
@@ -1150,8 +1234,8 @@
             const today = new Date().toISOString().split('T')[0];
             document.getElementById('filterDate').value = today;
 
-            // Load webhook info
-            setTimeout(() => getWebhookInfo(), 500);
+            // Load webhook info after a delay
+            setTimeout(() => getWebhookInfo(), 1000);
         });
 
         // Close modal on outside click
