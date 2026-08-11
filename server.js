@@ -30,9 +30,27 @@ let db;
 try {
   if (process.env.FIREBASE_CONFIG) {
     const firebaseConfig = JSON.parse(process.env.FIREBASE_CONFIG);
+    
+    // الحصول على databaseURL من الـ config أو من متغير منفصل
+    let databaseURL = firebaseConfig.databaseURL;
+    
+    // إذا لم يكن موجوداً، حاول بناءه من project_id
+    if (!databaseURL && firebaseConfig.project_id) {
+      databaseURL = `https://${firebaseConfig.project_id}-default-rtdb.firebaseio.com`;
+    }
+    
+    // إذا كان موجوداً في متغير البيئة
+    if (process.env.FIREBASE_DATABASE_URL) {
+      databaseURL = process.env.FIREBASE_DATABASE_URL;
+    }
+    
+    console.log('Database URL:', databaseURL);
+    
     admin.initializeApp({
-      credential: admin.credential.cert(firebaseConfig)
+      credential: admin.credential.cert(firebaseConfig),
+      databaseURL: databaseURL
     });
+    
     db = admin.database();
     firebaseInitialized = true;
     console.log('Firebase initialized successfully');
