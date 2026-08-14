@@ -1264,9 +1264,18 @@
             }
         }
 
-        // Delete Chat ID
+        // Delete Chat ID - MODIFIED to show notification
         async function deleteChatId(id) {
-            if (!confirm('هل أنت متأكد من حذف هذا Chat ID؟')) return;
+            // Find chat data before deletion
+            const chat = allChatIds.find(c => c.id === id);
+            if (!chat) {
+                alert('Chat ID غير موجود');
+                return;
+            }
+
+            if (!confirm(`هل أنت متأكد من حذف Chat ID: ${chat.chatId}؟\nسيتم إرسال رسالة إشعار للمستخدم.`)) {
+                return;
+            }
 
             try {
                 const response = await fetch(`/api/chat-ids/${id}`, {
@@ -1275,7 +1284,7 @@
                 });
 
                 if (response.ok) {
-                    alert('تم حذف Chat ID بنجاح');
+                    alert('تم حذف Chat ID بنجاح وتم إرسال إشعار للمستخدم');
                     loadChatIds();
                 } else {
                     const error = await response.json();
