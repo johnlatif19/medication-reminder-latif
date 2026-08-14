@@ -989,7 +989,7 @@ app.put('/api/chat-ids/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// Delete chat ID
+// Delete chat ID - MODIFIED to send notification
 app.delete('/api/chat-ids/:id', authenticateToken, async (req, res) => {
   if (!firebaseInitialized) {
     return res.status(500).json({ error: 'Firebase not initialized' });
@@ -1002,6 +1002,16 @@ app.delete('/api/chat-ids/:id', authenticateToken, async (req, res) => {
     
     if (!snapshot.exists()) {
       return res.status(404).json({ error: 'Chat ID not found' });
+    }
+
+    const chatData = snapshot.val();
+    const chatId = chatData.chatId;
+
+    // Send deletion notification before deleting
+    if (chatId && TELEGRAM_BOT_TOKEN) {
+      const deleteMessage = `تم حذف رقمك من موقع "نظام تذكير الأدوية (لطيف)"\n\nللتواصل مع المطور : https://wa.me/201274445091`;
+      await sendTelegramMessage(chatId, deleteMessage);
+      console.log(`Deletion notification sent to chat ID: ${chatId}`);
     }
 
     await chatIdsRef.child(id).remove();
